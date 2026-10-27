@@ -1,0 +1,239 @@
+<view class="page">
+  <view class="search-bar">
+    <view class="search-input-wrap">
+      <text class="search-icon">🔍</text>
+      <input 
+        class="search-input" 
+        placeholder="搜索记录或工单" 
+        value="{{searchKeyword}}"
+        bindinput="onSearchInput"
+        confirm-type="search"
+        bindconfirm="onSearch"
+      />
+      <text class="search-btn" bindtap="onSearch">搜索</text>
+    </view>
+  </view>
+
+  <view class="tabs">
+    <view 
+      class="tab-item {{activeTab === item.id ? 'active' : ''}}" 
+      wx:for="{{tabs}}" 
+      wx:key="id"
+      bindtap="switchTab"
+      data-id="{{item.id}}"
+    >
+      <text>{{item.name}}</text>
+    </view>
+  </view>
+
+  <view class="main">
+    <view wx:if="{{activeTab === 'records'}}" class="records-content">
+      
+
+      <view class="records-list">
+        <view 
+          class="record-item" 
+          wx:for="{{records}}" 
+          wx:key="id"
+          bindtap="viewDetail"
+          data-data="{{item}}"
+        >
+          <image class="record-img" src="{{item.inputImg || item.outImg}}" mode="aspectFill" />
+          <view class="record-info">
+            <text class="record-label">{{item.displayLabel || '未检测'}}</text>
+            <text class="record-time">{{item.startTime || '未知时间'}}</text>
+            <text class="record-operator">检测人：{{item.username || '-'}}</text>
+          </view>
+          <view class="record-arrow">›</view>
+        </view>
+      </view>
+
+      <view wx:if="{{records.length === 0 && !isLoading}}" class="empty">
+        <view class="empty-card">
+          <text class="empty-icon">🛡️</text>
+          <text class="empty-title">安全检测守护您的工地</text>
+          <text class="empty-desc">目前还没有检测记录，点击下方选项开始检测</text>
+          <view class="empty-actions">
+            <view class="empty-action-item" bindtap="goToImgRecords">
+              <text class="action-icon">📷</text>
+              <text class="action-text">图像检测</text>
+            </view>
+            <view class="empty-action-item" bindtap="goToVideoRecords">
+              <text class="action-icon">🎬</text>
+              <text class="action-text">视频检测</text>
+            </view>
+            <view class="empty-action-item" bindtap="goToCameraRecords">
+              <text class="action-icon">📹</text>
+              <text class="action-text">摄像检测</text>
+            </view>
+          </view>
+          <view class="safety-tips">
+            <text class="tips-title">💡 安全提示</text>
+            <view class="tips-list">
+              <text class="tip-item">• 进入施工现场请佩戴安全帽</text>
+              <text class="tip-item">• 注意安全用电，禁止私拉乱接</text>
+              <text class="tip-item">• 高空作业必须系好安全带</text>
+              <text class="tip-item">• 定期检查消防器材是否完好</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{activeTab === 'workorder'}}" class="workorder-content">
+      <view class="workorder-header">
+        <text class="header-title">工单台账</text>
+        <text class="header-btn" bindtap="goToWorkOrder">查看全部</text>
+      </view>
+
+      <view class="orders-list" wx:if="{{workOrders.length > 0}}">
+        <view class="order-item" wx:for="{{workOrders}}" wx:key="id">
+          <view class="order-header">
+            <text class="order-no">工单编号：{{item.orderNo}}</text>
+            <text class="order-status {{item.statusClass}}">{{item.statusText}}</text>
+          </view>
+          <view class="order-info">
+            <view class="info-row">
+              <text class="info-label">隐患类型：</text>
+              <text class="info-value">{{item.hiddenType}}</text>
+            </view>
+            <view class="info-row">
+              <text class="info-label">隐患等级：</text>
+              <text class="info-value level {{item.levelClass}}">{{item.level}}</text>
+            </view>
+            <view class="info-row">
+              <text class="info-label">责任人：</text>
+              <text class="info-value">{{item.responsible}}</text>
+            </view>
+            <view class="info-row">
+              <text class="info-label">整改时限：</text>
+              <text class="info-value">{{item.deadline}}</text>
+            </view>
+            <view class="info-row">
+              <text class="info-label">创建时间：</text>
+              <text class="info-value">{{item.createTime}}</text>
+            </view>
+          </view>
+          <view class="order-actions">
+            <view class="action-btn" bindtap="viewDetail" data-data="{{item}}">查看详情</view>
+            <view class="action-btn primary" bindtap="handleOrder" data-data="{{item}}" wx:if="{{item.status === 'pending'}}">处理</view>
+            <view class="action-btn success" bindtap="completeOrder" data-data="{{item}}" wx:if="{{item.status === 'processing'}}">完成</view>
+            <view class="action-btn warning" bindtap="closeOrder" data-data="{{item}}" wx:if="{{item.status === 'completed' || item.status === 'timeout'}}">关闭</view>
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{workOrders.length === 0 && !isLoading}}" class="empty">
+        <text class="empty-icon">📋</text>
+        <text class="empty-text">暂无工单记录</text>
+      </view>
+    </view>
+
+    <view wx:if="{{isLoading}}" class="loading">
+      <text>加载中...</text>
+    </view>
+  </view>
+
+  <view wx:if="{{showDetail && activeTab === 'records'}}" class="detail-modal" bindtap="closeDetail">
+    <view class="detail-content" catchtap="closeDetail">
+      <view class="detail-header">
+        <text class="detail-title">检测详情</text>
+        <text class="detail-close" bindtap="closeDetail">×</text>
+      </view>
+      <view class="detail-body">
+        <image class="detail-img" src="{{detailData.inputImg || detailData.outImg}}" mode="widthFix" />
+        <view class="detail-info">
+          <view class="info-item">
+            <text class="info-label">检测标签</text>
+            <text class="info-value">{{detailData.displayLabel || '-'}}</text>
+          </view>
+          <view class="info-item">
+            <text class="info-label">置信度</text>
+            <text class="info-value">{{detailData.displayConfidence || '-'}}</text>
+          </view>
+          <view class="info-item">
+            <text class="info-label">检测时间</text>
+            <text class="info-value">{{detailData.startTime || '-'}}</text>
+          </view>
+          <view class="info-item">
+            <text class="info-label">检测人</text>
+            <text class="info-value">{{detailData.username || '-'}}</text>
+          </view>
+          <view class="info-item">
+            <text class="info-label">整改建议</text>
+            <text class="info-value">{{detailData.suggestion || detailData.ai || '-'}}</text>
+          </view>
+          <view class="info-item">
+            <text class="info-label">识别权重</text>
+            <text class="info-value">{{detailData.weight || '-'}}</text>
+          </view>
+          <view class="info-item">
+            <text class="info-label">检测耗时</text>
+            <text class="info-value">{{detailData.allTime || '-'}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="detail-modal" wx:if="{{showDetail && activeTab === 'workorder'}}" bindtap="closeDetail">
+    <view class="modal-content">
+      <view class="modal-header">
+        <text class="modal-title">工单详情</text>
+        <view class="close-btn" bindtap="closeDetail">×</view>
+      </view>
+      <view class="modal-body" wx:if="{{currentOrder}}">
+        <view class="detail-row">
+          <text class="detail-label">工单编号</text>
+          <text class="detail-value">{{currentOrder.orderNo}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">隐患类型</text>
+          <text class="detail-value">{{currentOrder.hiddenType}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">隐患等级</text>
+          <text class="detail-value level {{currentOrder.levelClass}}">{{currentOrder.level}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">隐患位置</text>
+          <text class="detail-value">{{currentOrder.location}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">隐患描述</text>
+          <text class="detail-value">{{currentOrder.description}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">责任人</text>
+          <text class="detail-value">{{currentOrder.responsible}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">整改建议</text>
+          <text class="detail-value">{{currentOrder.suggestion}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">整改时限</text>
+          <text class="detail-value">{{currentOrder.deadline}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">当前状态</text>
+          <text class="detail-value status {{currentOrder.statusClass}}">{{currentOrder.statusText}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">创建时间</text>
+          <text class="detail-value">{{currentOrder.createTime}}</text>
+        </view>
+        <view class="detail-row" wx:if="{{currentOrder.updateTime}}">
+          <text class="detail-label">更新时间</text>
+          <text class="detail-value">{{currentOrder.updateTime}}</text>
+        </view>
+      </view>
+      <view class="modal-footer">
+        <view class="modal-btn" bindtap="closeDetail">关闭</view>
+        <view class="modal-btn primary" bindtap="handleOrder" data-data="{{currentOrder}}" wx:if="{{currentOrder && currentOrder.status === 'pending'}}">确认处理</view>
+        <view class="modal-btn success" bindtap="completeOrder" data-data="{{currentOrder}}" wx:if="{{currentOrder && currentOrder.status === 'processing'}}">处理完成</view>
+        <view class="modal-btn warning" bindtap="closeOrder" data-data="{{currentOrder}}" wx:if="{{currentOrder && (currentOrder.status === 'completed' || currentOrder.status === 'timeout')}}">关闭工单</view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,224 @@
+<view class="page">
+  <view class="header">
+    <text class="title">工单台账</text>
+  </view>
+
+  <view class="search-section">
+    <view class="search-box">
+      <input 
+        class="search-input" 
+        placeholder="搜索工单编号" 
+        value="{{searchKeyword}}" 
+        bindinput="onKeywordInput"
+        confirm-type="search"
+        bindconfirm="searchOrders"
+      />
+      <picker mode="selector" range="{{statusLabels}}" bindchange="onStatusChange">
+        <view class="status-picker">
+          <text>{{selectedStatusLabel || '全部状态'}}</text>
+          <text class="arrow">›</text>
+        </view>
+      </picker>
+    </view>
+    <view class="export-btn" wx:if="{{canExport}}" bindtap="exportExcel">
+      <text>导出Excel台账</text>
+    </view>
+  </view>
+
+  <view class="main">
+    <view class="orders-list" wx:if="{{orders.length > 0}}">
+      <view class="order-item" wx:for="{{orders}}" wx:key="id">
+        <view class="order-header">
+          <text class="order-no">工单编号：{{item.orderNo}}</text>
+          <text class="order-status {{item.statusClass}}">{{item.statusText}}</text>
+        </view>
+        <view class="order-info">
+          <view class="info-row">
+            <text class="info-label">隐患类型：</text>
+            <text class="info-value">{{item.hiddenType}}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">隐患等级：</text>
+            <text class="info-value level {{item.levelClass}}">{{item.level}}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">责任人：</text>
+            <text class="info-value">{{item.responsible}}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">整改时限：</text>
+            <text class="info-value">{{item.deadline}}</text>
+          </view>
+          <view class="info-row" wx:if="{{item.recheckStatus}}">
+            <text class="info-label">AI复核：</text>
+            <text class="info-value recheck {{item.recheckClass}}">{{item.recheckText}}</text>
+          </view>
+          <view class="info-row" wx:if="{{item.remindCount > 0}}">
+            <text class="info-label">督办次数：</text>
+            <text class="info-value remind-count">{{item.remindCount}}次</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">创建时间：</text>
+            <text class="info-value">{{item.createTime}}</text>
+          </view>
+        </view>
+        <view class="order-actions">
+          <view class="action-btn" bindtap="viewDetail" data-order="{{item}}">查看详情</view>
+          <view class="action-btn primary" bindtap="handleOrder" data-order="{{item}}" wx:if="{{item.status === 'pending'}}">处理</view>
+          <view class="action-btn success" bindtap="completeOrder" data-order="{{item}}" wx:if="{{item.status === 'processing'}}">完成</view>
+          <view class="action-btn warning" bindtap="closeOrder" data-order="{{item}}" wx:if="{{item.status === 'completed' || item.status === 'timeout'}}">关闭</view>
+        </view>
+      </view>
+    </view>
+
+    <view class="empty-state" wx:if="{{!isLoading && orders.length === 0}}">
+      <view class="empty-icon">📋</view>
+      <text class="empty-text">暂无工单记录</text>
+    </view>
+
+    <view class="loading-state" wx:if="{{isLoading}}">
+      <text>加载中...</text>
+    </view>
+  </view>
+
+  <!-- 工单详情弹窗 -->
+  <view class="detail-modal" wx:if="{{showDetail}}" catchtap="closeDetail">
+    <view class="modal-content" catchtap="">
+      <view class="modal-header">
+        <text class="modal-title">工单详情</text>
+        <view class="close-btn" bindtap="closeDetail">×</view>
+      </view>
+      <scroll-view scroll-y class="modal-body" wx:if="{{currentOrder}}">
+        <!-- 基本信息 -->
+        <view class="section-title">基本信息</view>
+        <view class="detail-row">
+          <text class="detail-label">工单编号</text>
+          <text class="detail-value">{{currentOrder.orderNo}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">隐患类型</text>
+          <text class="detail-value">{{currentOrder.hiddenType}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">隐患等级</text>
+          <text class="detail-value level {{currentOrder.levelClass}}">{{currentOrder.level}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">隐患位置</text>
+          <text class="detail-value">{{currentOrder.location}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">隐患描述</text>
+          <text class="detail-value">{{currentOrder.description}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">责任人</text>
+          <text class="detail-value">{{currentOrder.responsible}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">整改建议</text>
+          <text class="detail-value suggestion-text">{{currentOrder.suggestion}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">整改时限</text>
+          <text class="detail-value">{{currentOrder.deadline}}</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">当前状态</text>
+          <text class="detail-value status {{currentOrder.statusClass}}">{{currentOrder.statusText}}</text>
+        </view>
+
+        <!-- AI二次复核区域 -->
+        <view class="section-title">AI二次复核</view>
+        <view class="detail-row" wx:if="{{currentOrder.recheckStatus}}">
+          <text class="detail-label">复核状态</text>
+          <text class="detail-value recheck {{currentOrder.recheckClass}}">{{currentOrder.recheckText}}</text>
+        </view>
+        <view class="detail-row" wx:if="{{currentOrder.recheckResult}}">
+          <text class="detail-label">复核结果</text>
+          <text class="detail-value suggestion-text">{{currentOrder.recheckResult}}</text>
+        </view>
+        <view class="detail-row" wx:if="{{currentOrder.recheckTime}}">
+          <text class="detail-label">复核时间</text>
+          <text class="detail-value">{{currentOrder.recheckTime}}</text>
+        </view>
+        <!-- AI复核操作区（所有非关闭状态可复核） -->
+        <view class="recheck-section" wx:if="{{canRecheck && currentOrder.status !== 'closed'}}">
+          <view class="input-row">
+            <text class="input-label">整改图片：</text>
+            <view class="recheck-img-area">
+              <image wx:if="{{recheckImgLocalPath}}" src="{{recheckImgLocalPath}}" class="recheck-preview-img" mode="aspectFill" bindtap="previewRecheckImg"></image>
+              <view wx:else class="recheck-upload-btn" bindtap="chooseRecheckImage">
+                <text class="plus-icon">+</text>
+                <text class="upload-tip">选择整改图片</text>
+              </view>
+            </view>
+          </view>
+          <view class="action-btn primary recheck-btn {{recheckLoading ? 'disabled' : ''}}" bindtap="doRecheck">
+            <text>{{recheckLoading ? '复核中...' : 'AI复核'}}</text>
+          </view>
+        </view>
+
+        <!-- 审核意见区域 -->
+        <view class="section-title">审核意见</view>
+        <view class="detail-row" wx:if="{{currentOrder.auditOpinion}}">
+          <text class="detail-label">审核意见</text>
+          <text class="detail-value suggestion-text">{{currentOrder.auditOpinion}}</text>
+        </view>
+        <view class="detail-row" wx:if="{{currentOrder.auditUser}}">
+          <text class="detail-label">审核人</text>
+          <text class="detail-value">{{currentOrder.auditUser}}</text>
+        </view>
+        <view class="detail-row" wx:if="{{currentOrder.auditTime}}">
+          <text class="detail-label">审核时间</text>
+          <text class="detail-value">{{currentOrder.auditTime}}</text>
+        </view>
+        <!-- 审核操作区 -->
+        <view class="audit-section" wx:if="{{canAudit}}">
+          <view class="input-row">
+            <text class="input-label">填写意见：</text>
+            <textarea class="textarea-input" placeholder="请输入审核意见" value="{{auditOpinion}}" bindinput="onAuditOpinionInput" />
+          </view>
+          <view class="action-btn warning audit-btn" bindtap="doAudit">
+            <text>提交审核</text>
+          </view>
+        </view>
+
+        <!-- 督办提醒区域 -->
+        <view class="section-title">督办提醒</view>
+        <view class="detail-row">
+          <text class="detail-label">督办次数</text>
+          <text class="detail-value {{currentOrder.remindCount > 0 ? 'remind-count' : ''}}">{{currentOrder.remindCount > 0 ? '已督办 ' + currentOrder.remindCount + ' 次' : '暂无督办记录'}}</text>
+        </view>
+        <view class="detail-row" wx:if="{{currentOrder.lastRemindTime}}">
+          <text class="detail-label">最后督办</text>
+          <text class="detail-value">{{currentOrder.lastRemindTime}}</text>
+        </view>
+        <!-- 督办操作区（已关闭的工单不可督办） -->
+        <view class="remind-section" wx:if="{{canRemind && currentOrder.status !== 'closed'}}">
+          <view class="action-btn danger remind-btn {{remindLoading ? 'disabled' : ''}}" bindtap="doRemind">
+            <text>{{remindLoading ? '发送中...' : '发送督办提醒'}}</text>
+          </view>
+          <text class="remind-tip">将通过WebSocket实时推送给责任人</text>
+        </view>
+
+        <!-- 时间信息 -->
+        <view class="section-title">时间信息</view>
+        <view class="detail-row">
+          <text class="detail-label">创建时间</text>
+          <text class="detail-value">{{currentOrder.createTime}}</text>
+        </view>
+        <view class="detail-row" wx:if="{{currentOrder.updateTime}}">
+          <text class="detail-label">更新时间</text>
+          <text class="detail-value">{{currentOrder.updateTime}}</text>
+        </view>
+      </scroll-view>
+      <view class="modal-footer">
+        <view class="modal-btn" bindtap="closeDetail">关闭</view>
+        <view class="modal-btn primary" bindtap="handleOrder" data-order="{{currentOrder}}" wx:if="{{currentOrder && currentOrder.status === 'pending'}}">确认处理</view>
+        <view class="modal-btn success" bindtap="completeOrder" data-order="{{currentOrder}}" wx:if="{{currentOrder && currentOrder.status === 'processing'}}">处理完成</view>
+        <view class="modal-btn warning" bindtap="closeOrder" data-order="{{currentOrder}}" wx:if="{{currentOrder && (currentOrder.status === 'completed' || currentOrder.status === 'timeout')}}">关闭工单</view>
+      </view>
+    </view>
+  </view>
+</view>

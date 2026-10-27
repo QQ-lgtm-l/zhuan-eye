@@ -1,0 +1,59 @@
+<view class="page">
+  <view class="header">
+    <view class="header-bg"></view>
+    <view class="header-content">
+      <view class="user-info">
+        <view class="avatar">
+          <text>{{userInfo.name.charAt(0) || '用'}}</text>
+        </view>
+        <view class="user-detail">
+          <text class="user-name">{{userInfo.name || '用户'}}</text>
+          <text class="user-role">{{userInfo.role || '未知角色'}}</text>
+        </view>
+      </view>
+      <view class="header-title">
+        <text class="title">安全检测中心</text>
+        <text class="subtitle">智能识别安全隐患，守护施工安全</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="main">
+    <view wx:if="{{hasDetectPermission}}" class="detect-grid">
+      <view 
+        class="detect-card" 
+        wx:for="{{detectItems}}" 
+        wx:key="id" 
+        bindtap="navigateTo" 
+        data-id="{{item.id}}"
+        style="--card-color: {{item.color}}"
+      >
+        <view class="card-icon">{{item.icon}}</view>
+        <view class="card-content">
+          <text class="card-name">{{item.name}}</text>
+          <text class="card-desc">{{item.desc}}</text>
+        </view>
+        <view class="card-arrow">›</view>
+      </view>
+    </view>
+
+    <view wx:if="{{!hasDetectPermission}}" class="no-permission">
+      <text class="no-permission-icon">🔒</text>
+      <text class="no-permission-title">暂无检测权限</text>
+      <text class="no-permission-desc">您的角色暂无安全检测权限，请联系管理员</text>
+    </view>
+
+    <view wx:if="{{hasDetectPermission}}" class="tips-card">
+      <view class="tips-header">
+        <text class="tips-icon">💡</text>
+        <text class="tips-title">检测提示</text>
+      </view>
+      <view class="tips-list">
+        <text class="tip-item">• 图像检测支持JPG、PNG格式</text>
+        <text class="tip-item">• 批量检测建议每次不超过5张</text>
+        <text class="tip-item">• 视频检测建议时长不超过30秒</text>
+        <text class="tip-item">• 摄像检测需要相机权限</text>
+      </view>
+    </view>
+  </view>
+</view>

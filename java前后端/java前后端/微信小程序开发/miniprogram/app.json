@@ -1,0 +1,72 @@
+{
+  "pages": [
+    "pages/login/index",
+    "pages/register/index",
+    "pages/index/index",
+    "pages/safeDetect/index",
+    "pages/records/index",
+    "pages/messages/index",
+    "pages/profile/index",
+    "pages/profile/edit",
+    "pages/profile/help",
+    "pages/profile/about",
+    "pages/aiChat/index",
+    "pages/manual/index",
+    "pages/imgDetect/index",
+    "pages/batchDetect/index",
+    "pages/videoDetect/index",
+    "pages/cameraDetect/index",
+    "pages/imgRecords/index",
+    "pages/videoRecords/index",
+    "pages/cameraRecords/index",
+    "pages/workOrder/index"
+  ],
+  "window": {
+    "backgroundColor": "#f2f6fb",
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#0D47A1",
+    "navigationBarTitleText": "筑安慧眼",
+    "navigationBarTextStyle": "white"
+  },
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#0D47A1",
+    "borderStyle": "white",
+    "backgroundColor": "#ffffff",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页",
+        "iconPath": "images/icons/home.png",
+        "selectedIconPath": "images/icons/home-active.png"
+      },
+      {
+        "pagePath": "pages/safeDetect/index",
+        "text": "安全检测",
+        "iconPath": "images/icons/detect.png",
+        "selectedIconPath": "images/icons/detect-active.png"
+      },
+      {
+        "pagePath": "pages/records/index",
+        "text": "记录工单",
+        "iconPath": "images/icons/records.png",
+        "selectedIconPath": "images/icons/records-active.png"
+      },
+      {
+        "pagePath": "pages/messages/index",
+        "text": "推送消息",
+        "iconPath": "images/icons/message.png",
+        "selectedIconPath": "images/icons/message-active.png"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "个人中心",
+        "iconPath": "images/icons/profile.png",
+        "selectedIconPath": "images/icons/profile-active.png"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2",
+  "lazyCodeLoading": "requiredComponents"
+}

@@ -1,0 +1,36 @@
+# dependencies / build
+**/node_modules/
+**/target/
+**/dist/
+**/.idea/
+*.iml
+
+# runtime uploads (large)
+java前后端/java前后端/files/
+java前后端/java前后端/uploadedFiles/
+java前后端/java前后端/results/
+java前后端/java前后端/uploads/
+
+# packages / backups / temp
+*.zip
+*.7z
+.dsh-backup/
+.dsh-tmp/
+dsh-shots/
+
+# local / secrets
+.env
+.env.*
+application-local.properties
+project.private.config.json
+
+# logs
+*.log
+npm-debug.log*
+# root-level uploaded demo media
+/*.png
+/*.jpg
+/*.jpeg
+/*.mp4
+dsh-tmp/
+java前后端/java前后端/safety_springboot/files/

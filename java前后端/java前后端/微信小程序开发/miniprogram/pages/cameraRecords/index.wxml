@@ -1,0 +1,90 @@
+<view class="page">
+  <view class="header">
+    <text class="title">摄像检测记录</text>
+  </view>
+
+  <view class="search-section">
+    <view class="search-box">
+      <input 
+        class="search-input" 
+        placeholder="搜索识别结果" 
+        value="{{searchKeyword}}" 
+        bindinput="onKeywordInput"
+        confirm-type="search"
+        bindconfirm="searchRecords"
+      />
+      <view class="search-btn" bindtap="searchRecords">
+        <text>搜索</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="main">
+    <view class="records-list" wx:if="{{records.length > 0}}">
+      <view class="record-item" wx:for="{{records}}" wx:key="id" bindtap="viewDetail" data-record="{{item}}">
+        <view class="record-img-box">
+          <image src="{{item.outImg || item.inputImg}}" mode="aspectFit" class="record-img"></image>
+        </view>
+        <view class="record-info">
+          <text class="record-label">{{formatLabel(item.label) || '未检测到隐患'}}</text>
+          <text class="record-confidence">置信度：{{formatConfidence(item.confidence) || '-'}}</text>
+          <text class="record-time">时间：{{item.startTime || '-'}}</text>
+          <text class="record-user">用户：{{item.username || '-'}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="empty-state" wx:if="{{!isLoading && records.length === 0}}">
+      <view class="empty-icon">📭</view>
+      <text class="empty-text">暂无检测记录</text>
+    </view>
+
+    <view class="loading-state" wx:if="{{isLoading}}">
+      <text>加载中...</text>
+    </view>
+  </view>
+
+  <view wx:if="{{showDetail}}" class="detail-modal" bindtap="closeDetail">
+    <view class="detail-content" catchtap="closeDetail">
+      <view class="detail-header">
+        <text class="detail-title">检测详情</text>
+        <text class="detail-close" bindtap="closeDetail">×</text>
+      </view>
+      <scroll-view scroll-y class="detail-body">
+        <view class="detail-image">
+          <image src="{{detailData.inputImg || detailData.outImg}}" mode="widthFix" class="detail-img"></image>
+        </view>
+        <view class="detail-info">
+          <view class="info-row">
+            <text class="info-label">识别结果</text>
+            <text class="info-value">{{formatLabel(detailData.label) || '-'}}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">置信度</text>
+            <text class="info-value">{{formatConfidence(detailData.confidence) || formatConfidence(detailData.conf) || '-'}}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">识别权重</text>
+            <text class="info-value">{{formatWeight(detailData.weight) || '-'}}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">检测时间</text>
+            <text class="info-value">{{detailData.startTime || '-'}}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">检测人</text>
+            <text class="info-value">{{detailData.username || '-'}}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-label">检测耗时</text>
+            <text class="info-value">{{detailData.allTime || '-'}}</text>
+          </view>
+          <view class="info-row long">
+            <text class="info-label">整改建议</text>
+            <text class="info-value">{{detailData.suggestion || detailData.ai || '-'}}</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</view>

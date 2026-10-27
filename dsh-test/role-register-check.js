@@ -1,0 +1,55 @@
+const WebSocket = require('ws');
+const fs = require('fs');
+const http = require('http');
+const get = (p) => new Promise((r, j) => http.get({ host: '127.0.0.1', port: 9222, path: p }, (x) => { let d = ''; x.on('data', (c) => (d += c)); x.on('end', () => r(JSON.parse(d))); }).on('error', j));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+(async () => {
+	const t = (await get('/json/list')).find((x) => x.type === 'page');
+	const ws = new WebSocket(t.webSocketDebuggerUrl, { perMessageDeflate: false });
+	let id = 0; const p = new Map(); const send = (m, params = {}) => new Promise((r) => { const i = ++id; p.set(i, r); ws.send(JSON.stringify({ id: i, method: m, params })); });
+	ws.on('message', (m) => { const j = JSON.parse(m); if (j.id && p.has(j.id)) { p.get(j.id)(j.result); p.delete(j.id); } });
+	await new Promise((r) => ws.on('open', r));
+	await send('Page.enable'); await send('Runtime.enable'); await send('Network.enable');
+	await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+	const ev = async (e) => (await send('Runtime.evaluate', { expression: e, returnByValue: true, awaitPromise: true })).result.value;
+	const fill = async (ph, text) => { const ok = await ev(`(()=>{const el=[...document.querySelectorAll('input')].find(e=>e.placeholder===${JSON.stringify(ph)});if(!el)return false;el.focus();el.select&&el.select();return true})()`); if (!ok) return false; await send('Input.insertText', { text }); return true; };
+	const clickText = async (sel, text) => ev(`(()=>{const el=[...document.querySelectorAll(${JSON.stringify(sel)})].find(e=>e.textContent.trim().includes(${JSON.stringify(text)}));if(!el)return false;el.click();return true})()`);
+	const pick = async (index, text) => { await ev(`document.querySelectorAll('.el-select')[${index}]?.click()`); await sleep(500); return ev(`(()=>{const el=[...document.querySelectorAll('.el-select-dropdown__item')].find(e=>e.textContent.trim()===${JSON.stringify(text)});if(!el)return false;el.click();return true})()`); };
+	await send('Network.clearBrowserCookies');
+	const suffix = Date.now().toString().slice(-6);
+	const phone = `193${suffix}00`;
+	await send('Page.navigate', { url: 'http://localhost:8888/?r=' + Date.now() + '#/register' });
+	await sleep(3200);
+	console.log('roleSelects', await ev("document.querySelectorAll('.el-select').length"));
+	await fill('请输入真实姓名', '角色界面');
+	await fill('请输入 11 位手机号', phone);
+	await pick(0, '巡检员');
+	await clickText('button', '获取验证码');
+	await sleep(1500);
+	await clickText('button', '注 册');
+	await sleep(1800);
+	const dialog = await ev("document.querySelector('.success-body')?.textContent || ''");
+	const account = (dialog.match(/账\s*号：\s*([a-z0-9]+)/i) || [])[1] || '';
+	console.log('account', account, 'dialog', dialog.replace(/\s+/g, ' ').slice(0, 70));
+	await clickText('.el-dialog button', '去登录');
+	await sleep(2000);
+	console.log('loginRole', await ev("document.querySelector('input[placeholder=\"请选择角色\"]')?.value || document.querySelector('.role-select input')?.value || ''"));
+	console.log('loginAccount', await ev("document.querySelector('input[placeholder=\"请输入用户名\"]')?.value || ''"));
+	await fill('请输入密码', phone.slice(-6));
+	await clickText('button', '登 录');
+	await sleep(2200);
+	console.log('hash', await ev('location.hash'));
+	await send('Page.navigate', { url: 'http://localhost:8888/?p=' + Date.now() + '#/personal' });
+	await sleep(2600);
+	console.log('personalHasEmail', await ev("document.body.innerText.includes('邮箱')"));
+	const { data } = await send('Page.captureScreenshot', { format: 'png', fromSurface: true });
+	fs.writeFileSync('D:\\workspace\\factory\\dsh-shots\\91-personal-no-email.png', Buffer.from(data, 'base64'));
+	// 清理
+	let cleanup = 'skip';
+	try {
+		const u = JSON.parse(await ev(`fetch('/api/user/${account}').then(r=>r.json()).then(j=>JSON.stringify(j))`));
+		if (u.data && u.data.id) cleanup = await ev(`fetch('/api/user/${u.data.id}',{method:'DELETE'}).then(r=>r.json()).then(j=>JSON.stringify(j))`);
+	} catch (e) {}
+	console.log('cleanup', cleanup);
+	ws.close();
+})().catch((e) => { console.error(e); process.exit(1); });

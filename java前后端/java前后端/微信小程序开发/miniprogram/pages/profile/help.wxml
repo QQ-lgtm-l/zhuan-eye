@@ -1,0 +1,163 @@
+<view class="page">
+  <view class="header">
+    <text class="header-title">帮助中心</text>
+  </view>
+
+  <view class="main">
+    <view class="help-card">
+      <view class="help-section">
+        <view class="section-title">
+          <text class="title-icon">📱</text>
+          <text>基本操作</text>
+        </view>
+        <view class="help-list">
+          <view class="help-item" bindtap="toggleExpand('basic1')">
+            <view class="help-question">
+              <text>如何进行图像检测？</text>
+              <text class="expand-icon">{{expanded.basic1 ? '−' : '+'}}</text>
+            </view>
+            <view class="help-answer" wx:if="{{expanded.basic1}}">
+              <text>1. 点击底部导航栏的"检测"按钮</text>
+              <text>2. 选择"图像检测"</text>
+              <text>3. 上传或拍摄工地现场照片</text>
+              <text>4. 等待系统分析检测结果</text>
+              <text>5. 查看检测报告和整改建议</text>
+            </view>
+          </view>
+          <view class="help-item" bindtap="toggleExpand('basic2')">
+            <view class="help-question">
+              <text>如何进行视频检测？</text>
+              <text class="expand-icon">{{expanded.basic2 ? '−' : '+'}}</text>
+            </view>
+            <view class="help-answer" wx:if="{{expanded.basic2}}">
+              <text>1. 点击底部导航栏的"检测"按钮</text>
+              <text>2. 选择"视频检测"</text>
+              <text>3. 上传工地现场视频</text>
+              <text>4. 系统会逐帧分析视频内容</text>
+              <text>5. 查看检测报告和隐患位置</text>
+            </view>
+          </view>
+          <view class="help-item" bindtap="toggleExpand('basic3')">
+            <view class="help-question">
+              <text>如何查看检测记录？</text>
+              <text class="expand-icon">{{expanded.basic3 ? '−' : '+'}}</text>
+            </view>
+            <view class="help-answer" wx:if="{{expanded.basic3}}">
+              <text>1. 点击底部导航栏的"记录"按钮</text>
+              <text>2. 在下拉菜单中选择对应的记录类型</text>
+              <text>3. 可以查看图像、视频、摄像的检测记录</text>
+              <text>4. 点击记录卡片可查看详细信息</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="help-section">
+        <view class="section-title">
+          <text class="title-icon">⚠️</text>
+          <text>隐患等级说明</text>
+        </view>
+        <view class="help-list">
+          <view class="help-item" bindtap="toggleExpand('level1')">
+            <view class="help-question">
+              <text>重大隐患</text>
+              <text class="expand-icon">{{expanded.level1 ? '−' : '+'}}</text>
+            </view>
+            <view class="help-answer" wx:if="{{expanded.level1}}">
+              <text>可能导致重大伤亡事故或重大经济损失的隐患。</text>
+              <text>例如：未佩戴安全帽、高处坠落风险、脚手架失稳等。</text>
+              <text>处理要求：立即停工整改，24小时内完成处理。</text>
+            </view>
+          </view>
+          <view class="help-item" bindtap="toggleExpand('level2')">
+            <view class="help-question">
+              <text>较大隐患</text>
+              <text class="expand-icon">{{expanded.level2 ? '−' : '+'}}</text>
+            </view>
+            <view class="help-answer" wx:if="{{expanded.level2}}">
+              <text>可能导致较大伤亡事故或较大经济损失的隐患。</text>
+              <text>例如：车辆违规作业、机械设备故障等。</text>
+              <text>处理要求：48小时内完成整改。</text>
+            </view>
+          </view>
+          <view class="help-item" bindtap="toggleExpand('level3')">
+            <view class="help-question">
+              <text>一般隐患</text>
+              <text class="expand-icon">{{expanded.level3 ? '−' : '+'}}</text>
+            </view>
+            <view class="help-answer" wx:if="{{expanded.level3}}">
+              <text>可能导致一般事故的隐患。</text>
+              <text>例如：安全警示标志缺失、物料堆放不规范等。</text>
+              <text>处理要求：72小时内完成整改。</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="help-section">
+        <view class="section-title">
+          <text class="title-icon">🔧</text>
+          <text>常见问题</text>
+        </view>
+        <view class="help-list">
+          <view class="help-item" bindtap="toggleExpand('faq1')">
+            <view class="help-question">
+              <text>检测结果不准确怎么办？</text>
+              <text class="expand-icon">{{expanded.faq1 ? '−' : '+'}}</text>
+            </view>
+            <view class="help-answer" wx:if="{{expanded.faq1}}">
+              <text>1. 确保拍摄角度清晰，目标主体完整</text>
+              <text>2. 避免逆光或光线过暗的环境</text>
+              <text>3. 尽量靠近目标拍摄，确保细节清晰</text>
+              <text>4. 如多次检测结果不一致，请联系管理员</text>
+            </view>
+          </view>
+          <view class="help-item" bindtap="toggleExpand('faq2')">
+            <view class="help-question">
+              <text>视频检测为什么黑屏？</text>
+              <text class="expand-icon">{{expanded.faq2 ? '−' : '+'}}</text>
+            </view>
+            <view class="help-answer" wx:if="{{expanded.faq2}}">
+              <text>这通常是因为原始视频文件未正确保存。</text>
+              <text>请确保网络连接正常，检测完成后等待上传完成。</text>
+              <text>如果问题持续存在，请联系技术支持。</text>
+            </view>
+          </view>
+          <view class="help-item" bindtap="toggleExpand('faq3')">
+            <view class="help-question">
+              <text>如何处理工单？</text>
+              <text class="expand-icon">{{expanded.faq3 ? '−' : '+'}}</text>
+            </view>
+            <view class="help-answer" wx:if="{{expanded.faq3}}">
+              <text>1. 在"工单台账"中查看待处理工单</text>
+              <text>2. 根据隐患等级和整改建议进行处理</text>
+              <text>3. 处理完成后更新工单状态为"已处理"</text>
+              <text>4. 上传整改后的照片作为凭证</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="help-section">
+        <view class="section-title">
+          <text class="title-icon">📞</text>
+          <text>联系我们</text>
+        </view>
+        <view class="contact-info">
+          <view class="contact-item">
+            <text class="contact-label">技术支持</text>
+            <text class="contact-value">support@zhuanzhian.com</text>
+          </view>
+          <view class="contact-item">
+            <text class="contact-label">客服热线</text>
+            <text class="contact-value">400-888-8888</text>
+          </view>
+          <view class="contact-item">
+            <text class="contact-label">工作时间</text>
+            <text class="contact-value">周一至周五 9:00-18:00</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

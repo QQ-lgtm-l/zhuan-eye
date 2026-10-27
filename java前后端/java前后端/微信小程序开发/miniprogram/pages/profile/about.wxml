@@ -1,0 +1,94 @@
+<view class="page">
+  <view class="header">
+    <text class="header-title">关于我们</text>
+  </view>
+
+  <view class="main">
+    <view class="about-card">
+      <view class="logo-section">
+        <view class="logo">
+          <text>筑</text>
+        </view>
+        <text class="app-name">筑安慧眼</text>
+        <text class="app-subtitle">基于视觉驱动多Agent的房建施工现场隐患闭环协同管控系统</text>
+      </view>
+
+      <view class="info-section">
+        <view class="info-item">
+          <text class="info-label">版本号</text>
+          <text class="info-value">V1.0.0</text>
+        </view>
+        <view class="info-item">
+          <text class="info-label">开发者</text>
+          <text class="info-value">传智教育</text>
+        </view>
+        <view class="info-item">
+          <text class="info-label">联系方式</text>
+          <text class="info-value">support@zhuanzhian.com</text>
+        </view>
+      </view>
+
+      <view class="description-section">
+        <text class="section-title">系统简介</text>
+        <text class="description-text">
+          筑安慧眼是一款基于视觉驱动多Agent的房建施工现场隐患闭环协同管控系统，基于先进的视觉识别技术和多Agent协同架构，能够自动检测工地现场的安全隐患。
+        </text>
+        <text class="description-text">
+          系统支持图像检测、视频检测、实时摄像检测等多种检测方式，能够识别未佩戴安全帽、高处坠落风险、脚手架失稳等多种安全隐患，并提供智能整改建议。
+        </text>
+      </view>
+
+      <view class="features-section">
+        <text class="section-title">核心功能</text>
+        <view class="features-grid">
+          <view class="feature-item">
+            <view class="feature-icon">📷</view>
+            <text class="feature-name">图像检测</text>
+            <text class="feature-desc">上传图片自动识别隐患</text>
+          </view>
+          <view class="feature-item">
+            <view class="feature-icon">🎬</view>
+            <text class="feature-name">视频检测</text>
+            <text class="feature-desc">逐帧分析视频内容</text>
+          </view>
+          <view class="feature-item">
+            <view class="feature-icon">📹</view>
+            <text class="feature-name">摄像检测</text>
+            <text class="feature-desc">实时监控现场安全</text>
+          </view>
+          <view class="feature-item">
+            <view class="feature-icon">📋</view>
+            <text class="feature-name">工单管理</text>
+            <text class="feature-desc">隐患整改闭环管理</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="tech-section">
+        <text class="section-title">技术架构</text>
+        <view class="tech-list">
+          <view class="tech-item">
+            <text class="tech-label">前端技术</text>
+            <text class="tech-value">Vue 3 + Element Plus</text>
+          </view>
+          <view class="tech-item">
+            <text class="tech-label">小程序框架</text>
+            <text class="tech-value">微信小程序原生开发</text>
+          </view>
+          <view class="tech-item">
+            <text class="tech-label">后端服务</text>
+            <text class="tech-value">Spring Boot + Flask</text>
+          </view>
+          <view class="tech-item">
+            <text class="tech-label">AI模型</text>
+            <text class="tech-value">YOLOv8 + Multi-Agent</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="copyright">
+        <text>© 2024 筑安慧眼 版权所有</text>
+      </view>
+    </view>
+  </view>
+</view>

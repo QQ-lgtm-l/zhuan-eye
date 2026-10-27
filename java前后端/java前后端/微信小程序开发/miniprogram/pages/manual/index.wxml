@@ -1,0 +1,74 @@
+<view class="page">
+  <view class="search-bar">
+    <input class="search-input" value="{{keyword}}" placeholder="搜索隐患名称 / 关键词 / 规范" bindinput="onKeyword" confirm-type="search" bindconfirm="search" />
+    <view class="search-btn" bindtap="search">搜索</view>
+  </view>
+
+  <scroll-view class="category-scroll" scroll-x>
+    <view
+      wx:for="{{categories}}"
+      wx:key="id"
+      class="category-item {{activeCategory === item.id ? 'active' : ''}}"
+      data-id="{{item.id}}"
+      bindtap="selectCategory"
+    >
+      {{item.name}} {{item.count}}
+    </view>
+  </scroll-view>
+
+  <scroll-view class="list" scroll-y>
+    <view wx:if="{{loading}}" class="empty">加载中...</view>
+    <view wx:if="{{!loading && !items.length}}" class="empty">没有找到相关条目</view>
+    <view
+      wx:for="{{items}}"
+      wx:key="id"
+      class="item-card"
+      data-id="{{item.id}}"
+      bindtap="openDetail"
+    >
+      <view class="item-head">
+        <text class="item-name">{{item.name}}</text>
+        <text class="risk risk-{{item.riskClass}}">{{item.risk}}</text>
+      </view>
+      <text class="item-desc">{{item.suggestion}}</text>
+      <view class="item-foot">
+        <text class="item-basis">依据：{{item.basis}}</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <view class="mask" wx:if="{{detailVisible}}" bindtap="closeDetail">
+    <view class="detail" catchtap="noop">
+      <view class="detail-head">
+        <text class="detail-title">{{detail.name}}</text>
+        <text class="risk risk-{{detail.riskClass}}">{{detail.risk}}</text>
+      </view>
+      <scroll-view class="detail-body" scroll-y>
+        <view class="section">
+          <text class="section-title">整改建议</text>
+          <text class="section-text">{{detail.suggestion}}</text>
+        </view>
+        <view class="section">
+          <text class="section-title">处理方法</text>
+          <text class="section-text">{{detail.handle}}</text>
+        </view>
+        <view class="section">
+          <text class="section-title">预防措施</text>
+          <text class="section-text">{{detail.prevent}}</text>
+        </view>
+        <view class="section">
+          <text class="section-title">现场检查要点</text>
+          <text class="section-text">{{detail.checkpointsText}}</text>
+        </view>
+        <view class="section">
+          <text class="section-title">规范依据</text>
+          <text class="section-text">{{detail.basis}}</text>
+        </view>
+      </scroll-view>
+      <view class="detail-foot">
+        <view class="detail-btn ghost" bindtap="closeDetail">关闭</view>
+        <view class="detail-btn" bindtap="copyDetail">复制全文</view>
+      </view>
+    </view>
+  </view>
+</view>

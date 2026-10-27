@@ -1,0 +1,144 @@
+<view class="page">
+  <view class="header">
+    <text class="title">图像检测</text>
+    <text class="subtitle">上传图片进行安全隐患识别</text>
+  </view>
+
+  <view class="main">
+    <view class="settings-section">
+      <view class="setting-item">
+        <text class="setting-label">选择模型</text>
+        <view class="model-select" bindtap="showModelPicker">
+          <text class="model-text">{{selectedModel || '请选择模型'}}</text>
+          <text class="model-arrow">›</text>
+        </view>
+      </view>
+      <view class="setting-item">
+        <text class="setting-label">置信度阈值</text>
+        <view class="slider-container">
+          <slider 
+            class="conf-slider" 
+            :value="confValue" 
+            :min="0" 
+            :max="100" 
+            :step="5" 
+            activeColor="#0D47A1"
+            backgroundColor="#E3F2FD"
+            block-size="24"
+            bindchange="onConfChange"
+          />
+          <text class="conf-value">{{confValue}}%</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="upload-section">
+      <view class="upload-box" bindtap="chooseImage" wx:if="{{!imagePath}}">
+        <view class="upload-icon">📷</view>
+        <text class="upload-text">点击拍照或上传图片</text>
+        <text class="upload-hint">支持从相册选择或现场拍摄</text>
+      </view>
+
+      <view class="preview-box" wx:if="{{imagePath}}">
+        <image src="{{imagePath}}" mode="aspectFit" class="preview-img"></image>
+        <view class="preview-actions">
+          <view class="preview-btn" bindtap="chooseImage">重新选择</view>
+          <view class="preview-btn danger" bindtap="reset">清空</view>
+        </view>
+      </view>
+
+      <view class="action-box">
+        <view class="action-btn" bindtap="uploadAndRecognize" wx:if="{{imagePath && !isUploading}}">
+          <text>开始检测</text>
+        </view>
+        <view class="action-btn disabled" wx:if="{{!imagePath || isUploading}}">
+          <text>{{isUploading ? '检测中...' : '请选择图片'}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="result-section" wx:if="{{showResult && result}}">
+      <text class="section-title">检测结果</text>
+      
+      <view class="result-card" wx:if="{{result.outImg}}">
+        <image src="{{result.outImg}}" mode="aspectFit" class="result-img"></image>
+      </view>
+
+      <view class="result-info">
+        <!-- 多隐患标签 -->
+        <view class="info-row" wx:if="{{hazardList.length > 0}}">
+          <text class="info-label">识别结果：</text>
+          <view class="hazard-tags">
+            <view class="hazard-tag" wx:for="{{hazardList}}" wx:key="index">
+              <text class="hazard-tag-label">{{item.label}}</text>
+              <text class="hazard-tag-conf">置信度: {{item.confidence}}</text>
+            </view>
+          </view>
+        </view>
+        <view class="info-row" wx:elif="{{hazardList.length === 0}}">
+          <text class="info-label">识别结果：</text>
+          <text class="info-value">未检测到隐患</text>
+        </view>
+
+        <!-- 隐患等级 -->
+        <view class="info-row" wx:if="{{hazardLevel}}">
+          <text class="info-label">隐患等级：</text>
+          <text class="level-tag {{hazardLevel === '重大隐患' ? 'danger' : hazardLevel === '较大隐患' ? 'warning' : 'normal'}}">{{hazardLevel}}</text>
+        </view>
+
+        <view class="info-row">
+          <text class="info-label">检测时间：</text>
+          <text class="info-value">{{result.allTime || '-'}}</text>
+        </view>
+
+        <!-- 检测详情 -->
+        <view class="detail-section" wx:if="{{detailList.length > 0}}">
+          <view class="detail-title">检测详情（共{{detailList.length}}项）</view>
+          <view class="detail-table">
+            <view class="detail-header-row">
+              <text class="detail-col-label">类别</text>
+              <text class="detail-col-conf">置信度</text>
+              <text class="detail-col-type">类型</text>
+              <text class="detail-col-source">来源</text>
+            </view>
+            <view class="detail-row {{item.typeClass}}" wx:for="{{detailList}}" wx:key="index">
+              <text class="detail-col-label">{{item.hazard_type}}</text>
+              <text class="detail-col-conf">{{item.confidence}}</text>
+              <text class="detail-col-type">{{item.typeLabel}}</text>
+              <text class="detail-col-source">{{item.sourceLabel}}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 整改建议 -->
+        <view class="suggestion-section" wx:if="{{suggestion}}">
+          <text class="info-label">整改建议：</text>
+          <view class="suggestion-content">
+            <text class="suggestion-text">{{suggestion}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{showModelPicker}}" class="picker-modal" bindtap="hideModelPicker">
+    <view class="picker-content" catchtap="onPickerContentTap">
+      <view class="picker-header">
+        <text class="picker-title">选择模型</text>
+        <text class="picker-close" bindtap="hideModelPicker">×</text>
+      </view>
+      <view class="picker-list">
+        <view 
+          class="picker-item {{item.value === selectedModel ? 'active' : ''}}" 
+          wx:for="{{modelList}}" 
+          wx:key="value"
+          bindtap="selectModel"
+          data-value="{{item.value}}"
+        >
+          <text class="picker-item-text">{{item.label}}</text>
+          <text class="picker-item-check" wx:if="{{item.value === selectedModel}}">✓</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

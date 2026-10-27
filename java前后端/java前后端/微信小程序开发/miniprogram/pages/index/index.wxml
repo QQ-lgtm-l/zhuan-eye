@@ -1,0 +1,113 @@
+<view class="page">
+  <view class="header">
+    <view class="header-bg"></view>
+    <view class="header-content">
+      <view class="greeting">
+        <text class="greeting-text">您好，{{userInfo.name || '用户'}}</text>
+        <text class="greeting-role">{{userInfo.role || '未知角色'}}</text>
+      </view>
+      <view class="header-right">
+        <view class="notification-icon" bindtap="switchTab" data-url="/pages/messages/index">
+          <text>🔔</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="main">
+    <view class="quick-actions">
+      <view class="quick-item" bindtap="goAiChat">
+        <text class="quick-icon">🤖</text>
+        <view class="quick-text">
+          <text class="quick-title">智能问答</text>
+          <text class="quick-sub">隐患判定 / 整改建议</text>
+        </view>
+      </view>
+      <view class="quick-item" bindtap="goManual">
+        <text class="quick-icon">📖</text>
+        <view class="quick-text">
+          <text class="quick-title">安全知识手册</text>
+          <text class="quick-sub">32 条 · 五大类</text>
+        </view>
+      </view>
+    </view>
+    <view wx:if="{{showCharts}}" class="chart-section">
+      <view class="chart-card">
+        <view class="card-header">
+          <text class="card-title">不同种类的检测个数</text>
+        </view>
+        <view class="chart-container">
+          <canvas canvas-id="barChart" class="chart-canvas" style="width:{{screenWidth}}px;height:{{screenWidth*0.7}}px;"></canvas>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{showCharts}}" class="chart-section">
+      <view class="chart-card">
+        <view class="card-header">
+          <text class="card-title">不同用户的预测个数</text>
+        </view>
+        <view class="chart-container">
+          <canvas canvas-id="pieChart" class="chart-canvas" style="width:{{screenWidth}}px;height:{{screenWidth*0.7}}px;"></canvas>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{showCharts}}" class="chart-section">
+      <view class="chart-card">
+        <view class="card-header">
+          <text class="card-title">不同用户间的平均置信度</text>
+        </view>
+        <view class="chart-container">
+          <canvas canvas-id="radarChart" class="chart-canvas" style="width:{{screenWidth}}px;height:{{screenWidth*0.7}}px;"></canvas>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{showCharts}}" class="chart-section">
+      <view class="chart-card">
+        <view class="card-header">
+          <text class="card-title">实时预测信息</text>
+        </view>
+        <scroll-view class="table-scroll" scroll-x scroll-y>
+          <view class="monitor-table">
+            <view class="table-header">
+              <text class="th username">用户名</text>
+              <text class="th weight">识别权重</text>
+              <text class="th conf">最小阈值</text>
+              <text class="th time">时间</text>
+            </view>
+            <view class="table-body">
+              <view class="table-row" wx:for="{{realtimeData}}" wx:key="username">
+                <text class="td username">{{item.username}}</text>
+                <text class="td weight">{{item.weight}}</text>
+                <text class="td conf">{{item.conf}}</text>
+                <text class="td time">{{item.startTime}}</text>
+              </view>
+              <view class="table-empty" wx:if="{{realtimeData.length === 0}}">
+                <text>暂无数据</text>
+              </view>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
+
+    <view wx:if="{{showCharts}}" class="chart-section">
+      <view class="chart-card">
+        <view class="card-header">
+          <text class="card-title">近十日预测数量</text>
+        </view>
+        <scroll-view class="chart-scroll" scroll-x>
+          <canvas canvas-id="lineChart" class="chart-canvas" style="width:{{screenWidth*2}}px;height:{{screenWidth*0.75}}px;"></canvas>
+        </scroll-view>
+      </view>
+    </view>
+
+    <view wx:if="{{!showCharts}}" class="no-charts">
+      <text class="no-charts-icon">👷</text>
+      <text class="no-charts-title">欢迎使用筑安慧眼</text>
+      <text class="no-charts-desc">您可以查看检测记录和处理工单</text>
+    </view>
+  </view>
+</view>
