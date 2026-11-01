@@ -23,6 +23,14 @@ public class WorkOrder {
     private String description;
     private String responsible;
     private String deadline;
+    // 四级整改：响应截止 / 整改截止（与 deadline 并存，兼容旧数据）
+    private String responseDeadline;
+    private String rectifyDeadline;
+    // 人工调级留痕
+    private String adjustedLevel;
+    private String adjustReason;
+    private String adjustUser;
+    private String adjustTime;
     private String status;
     private String suggestion;
     private String createTime;

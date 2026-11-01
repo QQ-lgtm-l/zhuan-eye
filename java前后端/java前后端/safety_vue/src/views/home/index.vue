@@ -176,7 +176,7 @@
 								</div>
 							</div>
 							<div class="todo-side">
-								<el-tag size="small" :type="getLevelType(order.level)">{{ order.level || '一般隐患' }}</el-tag>
+								<el-tag size="small" :type="getLevelType(order.level)">{{ normalizeLevel(order.level) }}</el-tag>
 								<div class="todo-deadline" :class="{ danger: isOverdue(order) }">
 									{{ isOverdue(order) ? '已逾期 · ' : '截止 ' }}{{ deadlineLabel(order) }}
 								</div>
@@ -209,6 +209,7 @@ import {
 	Refresh,
 } from '@element-plus/icons-vue';
 import Cookies from 'js-cookie';
+import { normalizeLevel, levelTagType } from '/@/utils/hazardLevel';
 
 const router = useRouter();
 const storesThemeConfig = useThemeConfig();
@@ -224,10 +225,10 @@ const BLUE_200 = '#90CAF9';
 const BLUE_50 = '#E3F2FD';
 const CHART_COLORS = [NAVY, BLUE_800, BLUE_600, BLUE_400, BLUE_300, BLUE_200];
 const RISK_COLOR: Record<string, string> = {
-	重大隐患: '#D32F2F',
-	较大隐患: '#F9A825',
-	一般隐患: '#1976D2',
-	轻微隐患: '#26A69A',
+	'Ⅰ级重大': '#D32F2F',
+	'Ⅱ级较大': '#F9A825',
+	'Ⅲ级一般': '#1976D2',
+	'Ⅳ级轻微': '#26A69A',
 };
 
 const trendRef = ref();
@@ -415,7 +416,7 @@ const dayTrend = computed(() => {
 const pad2 = (n: number) => String(n).padStart(2, '0');
 // 后端 deadline 有两种格式：日期（2026-08-26）或时长（2小时 / 24小时 / 1天）
 const parseDue = (order: any): string => {
-	const raw = String(order?.deadline || '').trim();
+	const raw = String(order?.rectifyDeadline || order?.deadline || '').trim();
 	if (!raw) return '';
 	if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.replace('T', ' ').slice(0, 16);
 	const matched = raw.match(/^(\d+(?:\.\d+)?)\s*(小时|天|分钟)/);
@@ -430,13 +431,14 @@ const parseDue = (order: any): string => {
 	}
 	return '';
 };
-const deadlineLabel = (order: any) => parseDue(order) || String(order?.deadline || '-');
+const deadlineLabel = (order: any) => parseDue(order) || String(order?.rectifyDeadline || order?.deadline || '-');
 
 const orderStats = computed(() => {
-	const levelMap: Record<string, number> = { 重大隐患: 0, 较大隐患: 0, 一般隐患: 0, 轻微隐患: 0 };
+	const levelMap: Record<string, number> = { 'Ⅰ级重大': 0, 'Ⅱ级较大': 0, 'Ⅲ级一般': 0, 'Ⅳ级轻微': 0 };
 	const statusMap: Record<string, number> = { pending: 0, processing: 0, completed: 0, timeout: 0, closed: 0 };
 	state.orders.forEach((order) => {
-		if (levelMap[order.level] !== undefined) levelMap[order.level] += 1;
+		const level = normalizeLevel(order.level);
+		if (levelMap[level] !== undefined) levelMap[level] += 1;
 		if (statusMap[order.status] !== undefined) statusMap[order.status] += 1;
 	});
 	const total = state.orders.length;
@@ -480,10 +482,7 @@ function isOverdue(order: any) {
 	return due < nowText;
 }
 
-const getLevelType = (level: string) => {
-	const map: Record<string, string> = { 重大隐患: 'danger', 较大隐患: 'warning', 一般隐患: '', 轻微隐患: 'success' };
-	return map[level] || 'info';
-};
+const getLevelType = (level: string) => levelTagType(level);
 
 const onQuickAction = (path: string) => router.push(path);
 const goWorkOrder = (order: any) => router.push({ path: '/workOrder', query: { orderNo: order.orderNo } });

@@ -7,6 +7,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.example.Kcsj.common.HazardLevel;
 import com.example.Kcsj.common.Result;
 import com.example.Kcsj.entity.Message;
 import com.example.Kcsj.entity.User;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.Resource;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -105,26 +107,29 @@ public class VideoRecordsController {
     public Result<?> save(@RequestBody VideoRecords videoRecords) {
         System.out.println("视频记录保存请求: " + videoRecords);
 
-        // 兜底：如果hazardLevel为null，根据label推断隐患等级并回写到实体
+        // 兜底：如果hazardLevel为null，根据label推断四级隐患并回写到实体
         if (videoRecords.getHazardLevel() == null || videoRecords.getHazardLevel().isEmpty()) {
             String label = videoRecords.getLabel();
             if (label != null && !label.isEmpty() && !label.contains("未检测到")) {
-                String defaultLevel = "一般隐患";
+                String defaultLevel = "Ⅲ级一般";
                 String decodedLabel = decodeUnicode(label);
-                if (decodedLabel.contains("未佩戴安全帽")) {
-                    defaultLevel = "重大隐患";
-                } else if (decodedLabel.contains("车辆") || decodedLabel.contains("机械")) {
-                    defaultLevel = "较大隐患";
+                if (decodedLabel.matches(".*(临边|洞口|基坑|高支模|起重|倾覆|坍塌|堆载|超高|动火|高处抛物).*")) {
+                    defaultLevel = "Ⅰ级重大";
+                } else if (decodedLabel.matches(".*(安全带|连墙件|安全网|电缆|线缆|机械|车辆|灭火器|火灾|触电).*")) {
+                    defaultLevel = "Ⅱ级较大";
+                } else if (decodedLabel.matches(".*(标识|保洁|文明|垃圾).*")) {
+                    defaultLevel = "Ⅳ级轻微";
                 }
                 videoRecords.setHazardLevel(defaultLevel);
                 System.out.println("兜底设置hazardLevel=" + defaultLevel);
             }
         }
-
+        String normalizedLevel = HazardLevel.normalize(videoRecords.getHazardLevel());
+        videoRecords.setHazardLevel(normalizedLevel);
         videoRecordsMapper.insert(videoRecords);
 
         String label = videoRecords.getLabel();
-        String hazardLevel = videoRecords.getHazardLevel();
+        String hazardLevel = normalizedLevel;
         String suggestion = videoRecords.getSuggestion();
 
         if (label != null && !label.isEmpty() && !label.contains("未检测到")) {
@@ -139,8 +144,9 @@ public class VideoRecordsController {
                 hiddenType = decodeUnicode(hiddenType);
 
                 if (hazardLevel == null || hazardLevel.isEmpty()) {
-                    hazardLevel = "一般隐患";
+                    hazardLevel = "Ⅲ级一般";
                 }
+                hazardLevel = HazardLevel.normalize(hazardLevel);
 
                 // 使用Flask返回的suggestion，如果为空则生成默认建议
                 String workSuggestion = suggestion;
@@ -148,36 +154,26 @@ public class VideoRecordsController {
                     workSuggestion = "请立即整改，加强现场安全管理。";
                 }
 
+                String now = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
                 WorkOrder workOrder = new WorkOrder();
                 workOrder.setOrderNo("WO" + new SimpleDateFormat("yyyyMMddHHmmss").format(new Date()));
                 workOrder.setHiddenType(hiddenType);
                 workOrder.setLevel(hazardLevel);
                 workOrder.setLocation("施工现场");
                 workOrder.setDescription("视频检测到安全隐患：" + hiddenType);
-                workOrder.setResponsible("施工班组长");
-                workOrder.setDeadline("24小时");
+                workOrder.setResponsible(HazardLevel.defaultResponsible(hazardLevel));
+                workOrder.setDeadline(HazardLevel.rectifyTimeout(hazardLevel));
+                workOrder.setResponseDeadline(addMinutes(now, HazardLevel.responseMinutes(hazardLevel)));
+                workOrder.setRectifyDeadline(addMinutes(now, HazardLevel.rectifyMinutes(hazardLevel)));
                 workOrder.setStatus("pending");
                 workOrder.setSuggestion(workSuggestion);
-                workOrder.setCreateTime(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
-                workOrder.setUpdateTime(workOrder.getCreateTime());
+                workOrder.setCreateTime(now);
+                workOrder.setUpdateTime(now);
                 workOrder.setRecordId(videoRecords.getId());
                 workOrderMapper.insert(workOrder);
 
-                // 根据隐患等级确定推送角色（与图像检测逻辑一致）
-                List<String> pushRoles = new ArrayList<>();
-                if ("重大隐患".equals(hazardLevel)) {
-                    pushRoles.add("管理员");
-                    pushRoles.add("项目经理");
-                    pushRoles.add("专职安全员");
-                } else if ("较大隐患".equals(hazardLevel)) {
-                    pushRoles.add("项目经理");
-                    pushRoles.add("专职安全员");
-                    pushRoles.add("巡检员");
-                } else {
-                    pushRoles.add("专职安全员");
-                    pushRoles.add("巡检员");
-                    pushRoles.add("施工班组长");
-                }
+                // 根据四级隐患等级确定推送角色
+                List<String> pushRoles = HazardLevel.pushRoles(hazardLevel);
 
                 LambdaQueryWrapper<User> userWrapper = Wrappers.<User>lambdaQuery();
                 userWrapper.in(User::getRole, pushRoles);
@@ -216,5 +212,18 @@ public class VideoRecordsController {
         }
 
         return Result.success();
+    }
+
+    private String addMinutes(String baseTime, int minutes) {
+        Date base;
+        try {
+            base = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(baseTime);
+        } catch (Exception e) {
+            base = new Date();
+        }
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(base);
+        calendar.add(Calendar.MINUTE, minutes);
+        return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(calendar.getTime());
     }
 }

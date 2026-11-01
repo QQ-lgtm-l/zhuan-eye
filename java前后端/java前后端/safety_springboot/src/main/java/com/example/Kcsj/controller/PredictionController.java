@@ -2,6 +2,7 @@ package com.example.Kcsj.controller;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.example.Kcsj.common.HazardLevel;
 import com.example.Kcsj.common.Result;
 import com.example.Kcsj.entity.ImgRecords;
 import com.example.Kcsj.entity.Message;
@@ -21,6 +22,7 @@ import org.springframework.web.client.RestTemplate;
 import javax.annotation.Resource;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -142,24 +144,22 @@ public class PredictionController {
                 imgRecords.setSuggestion(String.valueOf(responses.get("suggestion")));
                 imgRecordsMapper.insert(imgRecords);
 
-                String hazardLevel = responses.getString("hazard_level");
+                String hazardLevel = HazardLevel.normalize(responses.getString("hazard_level"));
                 if (hazardLevel != null && !hazardLevel.isEmpty()) {
                     JSONArray labels = responses.getJSONArray("label");
                     String hiddenType = labels != null && !labels.isEmpty() ? labels.getString(0) : "未知隐患";
 
                     JSONObject rectifyTask = responses.getJSONObject("rectify_task");
-                    String responsible = "";
-                    String deadline = "";
-                    if (rectifyTask != null) {
-                        responsible = rectifyTask.getString("duty_person");
-                        deadline = rectifyTask.getString("timeout");
+                    String responsible = rectifyTask != null ? rectifyTask.getString("duty_person") : "";
+                    if (responsible == null || responsible.isEmpty()) {
+                        responsible = HazardLevel.defaultResponsible(hazardLevel);
                     }
-                    
-                    // 角色名称映射：将AI返回的角色名转换为系统中实际存在的角色名
-                    if (responsible != null) {
-                        responsible = responsible.replace("施工班组", "施工班组长")
-                                               .replace("现场施工人员", "施工班组长");
-                    }
+                    // 保留现有 6 个角色，不再把“现场施工人员”并成“施工班组长”
+                    responsible = responsible.replace("施工班组", "施工班组长");
+
+                    String responseTimeout = HazardLevel.responseTimeout(hazardLevel);
+                    String rectifyTimeout = HazardLevel.rectifyTimeout(hazardLevel);
+                    String now = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
 
                     WorkOrder workOrder = new WorkOrder();
                     workOrder.setOrderNo("WO" + new SimpleDateFormat("yyyyMMddHHmmss").format(new Date()));
@@ -167,32 +167,23 @@ public class PredictionController {
                     workOrder.setLevel(hazardLevel);
                     workOrder.setLocation("施工现场");
                     workOrder.setDescription("检测到安全隐患：" + hiddenType);
-                    workOrder.setResponsible(responsible != null ? responsible : "施工班组长");
-                    workOrder.setDeadline(deadline != null ? deadline : "24小时");
+                    workOrder.setResponsible(responsible);
+                    workOrder.setDeadline(rectifyTimeout);
+                    workOrder.setResponseDeadline(addMinutes(now, HazardLevel.responseMinutes(hazardLevel)));
+                    workOrder.setRectifyDeadline(addMinutes(now, HazardLevel.rectifyMinutes(hazardLevel)));
                     workOrder.setStatus("pending");
                     workOrder.setSuggestion(String.valueOf(responses.get("suggestion")));
-                    workOrder.setCreateTime(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
-                    workOrder.setUpdateTime(workOrder.getCreateTime());
+                    workOrder.setCreateTime(now);
+                    workOrder.setUpdateTime(now);
                     workOrder.setRecordId(imgRecords.getId());
                     workOrderMapper.insert(workOrder);
 
                     // 检测预警：始终按隐患等级向对应角色推送（不受responsible影响）
                     // responsible仅用于工单责任人字段，不用于推送
-                    List<String> pushRoles = new ArrayList<>();
-                    if ("重大隐患".equals(hazardLevel)) {
-                        pushRoles.add("管理员");
-                        pushRoles.add("项目经理");
-                        pushRoles.add("专职安全员");
-                    } else if ("较大隐患".equals(hazardLevel)) {
-                        pushRoles.add("项目经理");
-                        pushRoles.add("专职安全员");
-                        pushRoles.add("巡检员");
-                    } else {
-                        pushRoles.add("专职安全员");
-                        pushRoles.add("巡检员");
-                        pushRoles.add("施工班组长");
-                    }
-                    System.out.println("检测预警推送: hazardLevel=" + hazardLevel + ", hiddenType=" + hiddenType + ", pushRoles=" + pushRoles);
+                    List<String> pushRoles = HazardLevel.pushRoles(hazardLevel);
+                    System.out.println("检测预警推送: hazardLevel=" + hazardLevel
+                            + ", 响应=" + responseTimeout + ", 整改=" + rectifyTimeout
+                            + ", hiddenType=" + hiddenType + ", pushRoles=" + pushRoles);
 
                     LambdaQueryWrapper<User> userWrapper = Wrappers.<User>lambdaQuery();
                     userWrapper.in(User::getRole, pushRoles);
@@ -229,6 +220,19 @@ public class PredictionController {
         } catch (Exception e) {
             return Result.error("-1", "Error: " + e.getMessage());
         }
+    }
+
+    private String addMinutes(String baseTime, int minutes) {
+        Date base;
+        try {
+            base = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(baseTime);
+        } catch (Exception e) {
+            base = new Date();
+        }
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(base);
+        calendar.add(Calendar.MINUTE, minutes);
+        return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(calendar.getTime());
     }
 
     @GetMapping("/file_names")

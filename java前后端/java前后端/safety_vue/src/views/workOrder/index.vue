@@ -15,6 +15,10 @@
 					<el-option label="超时完成" value="timeout"></el-option>
 					<el-option label="已关闭" value="closed"></el-option>
 				</el-select>
+				<el-select v-model="state.tableData.param.level" placeholder="隐患等级" size="default" clearable teleported
+					style="width: 150px; margin-left: 15px" @change="getTableData()">
+					<el-option v-for="item in levelOptions" :key="item.value" :label="item.label" :value="item.value"></el-option>
+				</el-select>
 				<el-button size="default" type="primary" class="predict-button" @click="getTableData()">
 					<el-icon>
 						<Search />
@@ -35,7 +39,7 @@
 				<el-table-column prop="hiddenType" label="隐患类型" width="120" show-overflow-tooltip align="center"></el-table-column>
 				<el-table-column prop="level" label="隐患等级" width="100" align="center">
 					<template #default="scope">
-						<el-tag :type="getLevelType(scope.row.level)">{{ scope.row.level }}</el-tag>
+						<el-tag :type="getLevelType(scope.row.level)">{{ normalizeLevel(scope.row.level) }}</el-tag>
 					</template>
 				</el-table-column>
 				<el-table-column prop="location" label="隐患位置" width="110" show-overflow-tooltip align="center"></el-table-column>
@@ -94,7 +98,7 @@
 					{{ state.orderDetail.hiddenType }}
 				</el-form-item>
 				<el-form-item label="隐患等级">
-					<el-tag :type="getLevelType(state.orderDetail.level)">{{ state.orderDetail.level }}</el-tag>
+					<el-tag :type="getLevelType(state.orderDetail.level)">{{ normalizeLevel(state.orderDetail.level) }}</el-tag>
 				</el-form-item>
 				<el-form-item label="隐患位置">
 					{{ state.orderDetail.location }}
@@ -113,6 +117,10 @@
 						readonly
 						class="suggestion-textarea"
 					/>
+				</el-form-item>
+				<el-form-item label="响应时限">
+					{{ responseTimeout(state.orderDetail.level) }}
+					<span v-if="state.orderDetail.responseDeadline" class="detail-due">（截止 {{ state.orderDetail.responseDeadline }}）</span>
 				</el-form-item>
 				<el-form-item label="整改时限">
 					{{ state.orderDetail.deadline || '-' }}
@@ -220,6 +228,7 @@ import {
 	getWorkOrderList, getWorkOrderById, processWorkOrder, completeWorkOrder, closeWorkOrder,
 	exportWorkOrder, auditWorkOrder, remindWorkOrder, recheckWorkOrder
 } from '/@/api/workOrder';
+import { normalizeLevel, levelTagType, levelOptions, responseTimeout } from '/@/utils/hazardLevel';
 
 export default {
 	name: 'workOrder',
@@ -242,6 +251,7 @@ export default {
 					search1: '',
 					search2: '',
 					status: '',
+					level: '',
 				},
 			},
 			dialogVisible: false,
@@ -287,15 +297,7 @@ export default {
 			getTableData();
 		};
 
-		const getLevelType = (level: string) => {
-			const types: Record<string, string> = {
-				'重大隐患': 'danger',
-				'较大隐患': 'warning',
-				'一般隐患': 'info',
-				'轻微隐患': 'success',
-			};
-			return types[level] || 'info';
-		};
+		const getLevelType = (level: string) => levelTagType(level);
 
 		const getStatusType = (status: string) => {
 			const types: Record<string, string> = {
@@ -340,7 +342,8 @@ export default {
 		// 整改时限兼容两种格式：日期（2026-08-26）或时长（2小时 / 24小时 / 1天）
 		const pad2 = (n: number) => String(n).padStart(2, '0');
 		const parseDue = (row: any): string => {
-			const raw = String(row?.deadline || '').trim();
+			// 新工单优先用 rectify_deadline；旧工单回退 deadline 时长
+			const raw = String(row?.rectifyDeadline || row?.deadline || '').trim();
 			if (!raw) return '';
 			if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.replace('T', ' ').slice(0, 16);
 			const matched = raw.match(/^(\d+(?:\.\d+)?)\s*(小时|天|分钟)/);
@@ -595,6 +598,9 @@ export default {
 			handleSizeChange,
 			handleCurrentChange,
 			getLevelType,
+			normalizeLevel,
+			levelOptions,
+			responseTimeout,
 			getStatusType,
 			getStatusText,
 			isOverdue,

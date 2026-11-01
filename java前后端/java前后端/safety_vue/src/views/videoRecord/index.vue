@@ -54,7 +54,7 @@
 				<el-table-column prop="confidence" label="置信度" show-overflow-tooltip align="center"></el-table-column>
 				<el-table-column prop="hazardLevel" label="隐患等级" show-overflow-tooltip align="center">
 					<template #default="scope">
-						<el-tag v-if="scope.row.hazardLevel && scope.row.hazardLevel !== ''" :type="getHazardType(scope.row.hazardLevel)" size="small">{{ scope.row.hazardLevel }}</el-tag>
+						<el-tag v-if="scope.row.hazardLevel && scope.row.hazardLevel !== ''" :type="getHazardType(scope.row.hazardLevel)" size="small">{{ normalizeLevel(scope.row.hazardLevel) }}</el-tag>
 						<span v-else style="color: #67C23A;">无隐患</span>
 					</template>
 				</el-table-column>
@@ -80,6 +80,7 @@ import { reactive, onMounted, ref } from 'vue';
 import { ElMessageBox, ElMessage } from 'element-plus';
 import request from '/@/utils/request';
 import { useUserInfo } from '/@/stores/userInfo';
+import { normalizeLevel, levelTagType } from '/@/utils/hazardLevel';
 import { storeToRefs } from 'pinia';
 
 const stores = useUserInfo();
@@ -167,11 +168,7 @@ const formatLabel = (label: string): string => {
 };
 
 // 根据隐患等级获取标签类型
-const getHazardType = (level: string): string => {
-	if (level.includes('重大')) return 'danger';
-	if (level.includes('较大')) return 'warning';
-	return 'info';
-};
+const getHazardType = (level: string): string => levelTagType(level);
 
 // 转换数据以适应表格显示
 const transformData = (originalData: any, confidences: string[], labels: string[]) => {

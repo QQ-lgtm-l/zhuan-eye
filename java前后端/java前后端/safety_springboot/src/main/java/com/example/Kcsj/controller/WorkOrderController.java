@@ -3,6 +3,7 @@ package com.example.Kcsj.controller;
 import com.alibaba.fastjson.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.example.Kcsj.common.HazardLevel;
 import com.example.Kcsj.common.Result;
 import com.example.Kcsj.entity.Message;
 import com.example.Kcsj.entity.User;
@@ -46,7 +47,8 @@ public class WorkOrderController {
             @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize,
             @RequestParam(name = "search1", defaultValue = "") String search1,
             @RequestParam(name = "search2", defaultValue = "") String search2,
-            @RequestParam(name = "status", defaultValue = "") String status) {
+            @RequestParam(name = "status", defaultValue = "") String status,
+            @RequestParam(name = "level", defaultValue = "") String level) {
         try {
             List<WorkOrder> records = workOrderMapper.selectList(null);
             records.sort((a, b) -> {
@@ -65,6 +67,12 @@ public class WorkOrderController {
             if (!status.isEmpty()) {
                 records = records.stream().filter(r -> status.equals(r.getStatus())).collect(java.util.stream.Collectors.toList());
             }
+            if (!level.isEmpty()) {
+                String normalizedLevel = HazardLevel.normalize(level);
+                records = records.stream()
+                        .filter(r -> normalizedLevel.equals(HazardLevel.normalize(r.getLevel())))
+                        .collect(java.util.stream.Collectors.toList());
+            }
             int total = records.size();
             int start = (pageNum - 1) * pageSize;
             int end = Math.min(start + pageSize, total);
@@ -80,6 +88,33 @@ public class WorkOrderController {
 
     private static boolean contains(String text, String keyword) {
         return text != null && keyword != null && text.contains(keyword);
+    }
+
+    private boolean isTimeoutByDeadline(WorkOrder order) {
+        String rectifyDeadline = order.getRectifyDeadline();
+        if (rectifyDeadline == null || rectifyDeadline.isEmpty()) {
+            return false;
+        }
+        try {
+            Date expected = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(rectifyDeadline);
+            return new Date().after(expected);
+        } catch (Exception e) {
+            System.err.println("整改截止时间解析异常: " + rectifyDeadline);
+            return false;
+        }
+    }
+
+    private String addMinutes(String baseTime, int minutes) {
+        Date base;
+        try {
+            base = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").parse(baseTime);
+        } catch (Exception e) {
+            base = new Date();
+        }
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(base);
+        calendar.add(Calendar.MINUTE, minutes);
+        return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(calendar.getTime());
     }
 
     @GetMapping("/{id}")
@@ -102,8 +137,20 @@ public class WorkOrderController {
             if (order.getStatus() == null || order.getStatus().isEmpty()) {
                 order.setStatus("pending");
             }
-            order.setCreateTime(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
-            order.setUpdateTime(order.getCreateTime());
+            String level = HazardLevel.normalize(order.getLevel());
+            order.setLevel(level);
+            if (order.getDeadline() == null || order.getDeadline().isEmpty()) {
+                order.setDeadline(HazardLevel.rectifyTimeout(level));
+            }
+            String now = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+            order.setCreateTime(now);
+            order.setUpdateTime(now);
+            if (order.getResponseDeadline() == null || order.getResponseDeadline().isEmpty()) {
+                order.setResponseDeadline(addMinutes(now, HazardLevel.responseMinutes(level)));
+            }
+            if (order.getRectifyDeadline() == null || order.getRectifyDeadline().isEmpty()) {
+                order.setRectifyDeadline(addMinutes(now, HazardLevel.rectifyMinutes(level)));
+            }
             if (order.getRemindCount() == null) {
                 order.setRemindCount(0);
             }
@@ -124,11 +171,29 @@ public class WorkOrderController {
                 return Result.error("-1", "工单不存在");
             }
             if (order.getHiddenType() != null) existing.setHiddenType(order.getHiddenType());
-            if (order.getLevel() != null) existing.setLevel(order.getLevel());
+            if (order.getLevel() != null) {
+                String level = HazardLevel.normalize(order.getLevel());
+                existing.setLevel(level);
+                if (order.getDeadline() == null) {
+                    existing.setDeadline(HazardLevel.rectifyTimeout(level));
+                }
+                if (order.getResponseDeadline() == null) {
+                    String base = existing.getCreateTime() != null ? existing.getCreateTime()
+                            : new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+                    existing.setResponseDeadline(addMinutes(base, HazardLevel.responseMinutes(level)));
+                    existing.setRectifyDeadline(addMinutes(base, HazardLevel.rectifyMinutes(level)));
+                }
+            }
             if (order.getLocation() != null) existing.setLocation(order.getLocation());
             if (order.getDescription() != null) existing.setDescription(order.getDescription());
             if (order.getResponsible() != null) existing.setResponsible(order.getResponsible());
             if (order.getDeadline() != null) existing.setDeadline(order.getDeadline());
+            if (order.getResponseDeadline() != null) existing.setResponseDeadline(order.getResponseDeadline());
+            if (order.getRectifyDeadline() != null) existing.setRectifyDeadline(order.getRectifyDeadline());
+            if (order.getAdjustedLevel() != null) existing.setAdjustedLevel(order.getAdjustedLevel());
+            if (order.getAdjustReason() != null) existing.setAdjustReason(order.getAdjustReason());
+            if (order.getAdjustUser() != null) existing.setAdjustUser(order.getAdjustUser());
+            if (order.getAdjustTime() != null) existing.setAdjustTime(order.getAdjustTime());
             if (order.getStatus() != null) existing.setStatus(order.getStatus());
             if (order.getSuggestion() != null) existing.setSuggestion(order.getSuggestion());
             if (order.getRectifyImg() != null) existing.setRectifyImg(order.getRectifyImg());
@@ -176,8 +241,9 @@ public class WorkOrderController {
             String deadline = existing.getDeadline();
             String createTime = existing.getCreateTime();
 
-            boolean isTimeout = false;
-            if (deadline != null && !deadline.isEmpty() && createTime != null && !createTime.isEmpty()) {
+            boolean isTimeout = isTimeoutByDeadline(existing);
+            if ((existing.getRectifyDeadline() == null || existing.getRectifyDeadline().isEmpty())
+                    && deadline != null && !deadline.isEmpty() && createTime != null && !createTime.isEmpty()) {
                 try {
                     java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(\\d+)(小时|天|分钟)");
                     java.util.regex.Matcher matcher = pattern.matcher(deadline);
@@ -315,6 +381,7 @@ public class WorkOrderController {
             @RequestParam(name = "search1", defaultValue = "") String search1,
             @RequestParam(name = "search2", defaultValue = "") String search2,
             @RequestParam(name = "status", defaultValue = "") String status,
+            @RequestParam(name = "level", defaultValue = "") String level,
             HttpServletResponse response) {
         try {
             // 查询数据（与列表查询逻辑一致）
@@ -334,6 +401,12 @@ public class WorkOrderController {
             }
             if (!status.isEmpty()) {
                 records = records.stream().filter(r -> status.equals(r.getStatus())).collect(java.util.stream.Collectors.toList());
+            }
+            if (!level.isEmpty()) {
+                String normalizedLevel = HazardLevel.normalize(level);
+                records = records.stream()
+                        .filter(r -> normalizedLevel.equals(HazardLevel.normalize(r.getLevel())))
+                        .collect(java.util.stream.Collectors.toList());
             }
 
             // 生成Excel
@@ -482,10 +555,9 @@ public class WorkOrderController {
 
             // 向责任人发送督办消息 - 根据responsible字段解析角色，查找对应用户
             String responsible = existing.getResponsible();
-            // 角色名称映射
+            // 角色名称映射：保留“现场施工人员”，不合并成班组长
             if (responsible != null) {
-                responsible = responsible.replace("施工班组", "施工班组长")
-                                       .replace("现场施工人员", "施工班组长");
+                responsible = responsible.replace("施工班组", "施工班组长");
             }
             List<User> users = new ArrayList<>();
 
@@ -517,21 +589,7 @@ public class WorkOrderController {
 
             // 如果还没找到用户，按隐患等级推送对应角色
             if (users.isEmpty()) {
-                List<String> defaultRoles = new ArrayList<>();
-                String level = existing.getLevel();
-                if ("重大隐患".equals(level)) {
-                    defaultRoles.add("管理员");
-                    defaultRoles.add("项目经理");
-                    defaultRoles.add("专职安全员");
-                } else if ("较大隐患".equals(level)) {
-                    defaultRoles.add("项目经理");
-                    defaultRoles.add("专职安全员");
-                    defaultRoles.add("巡检员");
-                } else {
-                    defaultRoles.add("专职安全员");
-                    defaultRoles.add("巡检员");
-                    defaultRoles.add("施工班组长");
-                }
+                List<String> defaultRoles = HazardLevel.pushRoles(existing.getLevel());
                 LambdaQueryWrapper<User> defaultWrapper = Wrappers.<User>lambdaQuery();
                 defaultWrapper.in(User::getRole, defaultRoles);
                 users = userMapper.selectList(defaultWrapper);
