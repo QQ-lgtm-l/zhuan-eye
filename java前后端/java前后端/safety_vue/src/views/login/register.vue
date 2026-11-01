@@ -51,12 +51,6 @@
 					</div>
 				</el-form-item>
 
-				<el-form-item prop="role" label="职位">
-					<el-select v-model="form.role" placeholder="请选择职位" size="large" style="width: 100%" teleported>
-						<el-option v-for="item in roleOptions" :key="item" :label="item" :value="item" />
-					</el-select>
-				</el-form-item>
-
 				<el-alert
 					v-if="demoTip"
 					:title="demoTip"
@@ -74,7 +68,7 @@
 					已有账号？
 					<el-link type="primary" :underline="false" @click="router.push('/login')">去登录</el-link>
 				</div>
-				<p class="hint">账号自动取姓名全拼；初始密码统一为 123456，登录后请及时在个人中心修改。</p>
+				<p class="hint">账号自动取姓名全拼，默认职位为「现场施工人员」；初始密码统一 123456，登录后可在个人中心修改。</p>
 			</el-form>
 		</div>
 
@@ -86,9 +80,10 @@
 			append-to-body
 		>
 			<div class="success-body">
+				<p>手机号：<b>{{ result.tel }}</b></p>
 				<p>账 号：<b>{{ result.username }}</b></p>
 				<p>初始密码：<b>{{ result.password }}</b></p>
-				<p class="success-tip">请使用账号和初始密码登录，登录后建议在个人中心修改密码。</p>
+				<p class="success-tip">请使用手机号和初始密码登录；职位默认为现场施工人员，管理员可在后台调整。</p>
 			</div>
 			<template #footer>
 				<el-button type="primary" @click="goLogin">去登录</el-button>
@@ -105,14 +100,13 @@ import { quickRegister, sendPhoneCode } from '/@/api/quickRegister';
 
 const router = useRouter();
 const formRef = ref<FormInstance>();
-const roleOptions = ['项目经理', '专职安全员', '巡检员', '施工班组长', '现场施工人员'];
-const form = reactive({ name: '', phone: '', code: '', role: '现场施工人员' });
+const form = reactive({ name: '', phone: '', code: '' });
 const sending = ref(false);
 const submitting = ref(false);
 const countdown = ref(0);
 const demoTip = ref('');
 const successVisible = ref(false);
-const result = reactive({ username: '', password: '' });
+const result = reactive({ username: '', password: '', tel: '' });
 let timer: any = null;
 
 const rules: FormRules = {
@@ -125,7 +119,6 @@ const rules: FormRules = {
 		{ required: true, message: '请输入验证码', trigger: 'blur' },
 		{ len: 6, message: '验证码为 6 位', trigger: 'blur' },
 	],
-	role: [{ required: true, message: '请选择职位', trigger: 'change' }],
 };
 
 const onPhoneInput = () => {
@@ -181,6 +174,7 @@ const submit = async () => {
 		if (res.code == 0) {
 			result.username = res.data.username;
 			result.password = res.data.password;
+			result.tel = res.data.tel || form.phone;
 			successVisible.value = true;
 		} else {
 			ElMessage.error(res.msg || '注册失败');
@@ -194,7 +188,7 @@ const submit = async () => {
 
 const goLogin = () => {
 	successVisible.value = false;
-	router.push({ path: '/login', query: { u: result.username, r: form.role } });
+	router.push({ path: '/login', query: { p: result.tel } });
 };
 
 onBeforeUnmount(() => {

@@ -12,11 +12,12 @@ import javax.annotation.Resource;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * 极简注册：姓名 + 手机号 + 验证码。
  *
- * 账号自动取姓名全拼（重名追加数字），初始密码为手机号后 6 位，
+ * 账号自动取姓名全拼（重名追加数字），初始密码为 123456，
  * 其他信息使用默认值，登录后可在个人中心修改。
  */
 @RestController
@@ -28,6 +29,10 @@ public class QuickRegisterController {
 
     @Resource
     private PhoneCodeService phoneCodeService;
+
+    /** 密码需为 6-30 位，且同时包含字母和数字 */
+    private static final Pattern PASSWORD_PATTERN =
+            Pattern.compile("^(?=.*[A-Za-z])(?=.*\\d)\\S{6,30}$");
 
     private String value(Map<String, String> body, String key) {
         return body == null || body.get(key) == null ? "" : body.get(key).trim();
@@ -43,6 +48,33 @@ public class QuickRegisterController {
         } catch (Exception e) {
             return Result.error("-1", "验证码发送失败：" + e.getMessage());
         }
+    }
+
+    /** 忘记密码：手机验证码 + 新密码 */
+    @PostMapping("/reset-password-by-phone")
+    public Result<?> resetPassword(@RequestBody Map<String, String> body) {
+        String phone = value(body, "phone");
+        String code = value(body, "code");
+        String newPassword = body == null || body.get("newPassword") == null ? "" : body.get("newPassword");
+        if (!phoneCodeService.isValidPhone(phone)) {
+            return Result.error("-1", "手机号格式不正确");
+        }
+        if (!PASSWORD_PATTERN.matcher(newPassword).matches()) {
+            return Result.error("-1", "密码需为 6-30 位，且同时包含字母和数字");
+        }
+        User user = userMapper.selectOne(Wrappers.<User>lambdaQuery().eq(User::getTel, phone).last("limit 1"));
+        if (user == null) {
+            return Result.error("-1", "该手机号还未注册");
+        }
+        try {
+            phoneCodeService.check(phone, code);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return Result.error("-1", e.getMessage());
+        }
+        user.setPassword(newPassword);
+        userMapper.updateById(user);
+        phoneCodeService.consume(phone, code);
+        return Result.success("密码重置成功，请使用新密码登录");
     }
 
     /** 极简注册 */
@@ -67,14 +99,6 @@ public class QuickRegisterController {
             return Result.error("-1", e.getMessage());
         }
 
-        String role = value(body, "role");
-        if (role.isEmpty()) {
-            role = "现场施工人员";
-        }
-        if (!java.util.Arrays.asList("项目经理", "专职安全员", "巡检员", "施工班组长", "现场施工人员").contains(role)) {
-            return Result.error("-1", "请选择正确的职位");
-        }
-
         String username = generateUsername(name, phone);
         String password = "123456";
 
@@ -85,7 +109,8 @@ public class QuickRegisterController {
         user.setSex("");
         user.setEmail("");
         user.setTel(phone);
-        user.setRole(role);
+        // 注册不再选职位，默认现场施工人员，由管理员在用户管理里调整
+        user.setRole("现场施工人员");
         user.setTime(new Date());
         user.setAvatar("");
         userMapper.insert(user);
@@ -96,6 +121,7 @@ public class QuickRegisterController {
         data.put("username", username);
         data.put("password", password);
         data.put("name", name);
+        data.put("tel", phone);
         data.put("role", user.getRole());
         data.put("message", "注册成功，请使用账号和初始密码登录");
         return Result.success(data);

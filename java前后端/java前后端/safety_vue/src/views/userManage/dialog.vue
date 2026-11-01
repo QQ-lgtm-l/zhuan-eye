@@ -73,9 +73,11 @@
 					</el-col>
 					<el-col :xs="24" :sm="24" :md="24" :lg="24" :xl="24">
 						<el-form-item label="角色">
-							<el-select v-model="state.form.role" placeholder="请选择角色" style="width: 100%" teleported filterable>
-								<el-option v-for="item in option" :key="item.id" :label="item.label" :value="item.role" />
+							<el-select v-model="state.form.role" placeholder="请选择角色" style="width: 100%" teleported filterable :disabled="state.form.username === 'admin'">
+								<el-option v-for="item in roleOptions" :key="item.id" :label="item.label" :value="item.role" />
 							</el-select>
+							<div v-if="state.form.username === 'admin'" class="role-hint">系统唯一管理员，角色不可修改</div>
+							<div v-else class="role-hint">角色修改后，该用户需要重新登录才会生效</div>
 						</el-form-item>
 					</el-col>
 				</el-row>
@@ -91,7 +93,7 @@
 </template>
 
 <script setup lang="ts" name="systemRoleDialog">
-import { nextTick, reactive, ref } from 'vue';
+import { computed, nextTick, reactive, ref } from 'vue';
 import type { FormInstance, UploadInstance, UploadProps } from 'element-plus';
 import { ElMessage } from 'element-plus';
 import { Plus, Camera } from '@element-plus/icons-vue';
@@ -121,7 +123,10 @@ const rules = {
 			trigger: 'blur',
 		},
 	],
-	tel: [{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码', trigger: 'blur' }],
+	tel: [
+		{ required: true, message: '请输入手机号', trigger: 'blur' },
+		{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码', trigger: 'blur' },
+	],
 };
 
 const option = [
@@ -132,6 +137,9 @@ const option = [
 	{ id: 5, label: '施工班组长', role: '施工班组长' },
 	{ id: 6, label: '现场施工人员', role: '现场施工人员' },
 ];
+
+// 系统只允许一个管理员 admin，新增/修改时不再提供“管理员”选项
+const roleOptions = computed(() => option.filter((item) => item.role !== '管理员'));
 
 // 定义变量内容
 const state = reactive({
@@ -209,7 +217,7 @@ const onSubmit = () => {
 		req
 			.then((res: any) => {
 				if (res.code == 0) {
-					ElMessage.success(isEdit ? '修改成功！' : '添加成功！');
+					ElMessage.success(isEdit ? '修改成功，该用户重新登录后角色生效' : '添加成功！');
 					closeDialog();
 					emit('refresh');
 				} else {
@@ -312,5 +320,11 @@ defineExpose({
 	display: flex;
 	justify-content: flex-end;
 	gap: 10px;
+}
+.role-hint {
+	margin-top: 4px;
+	color: #93a2b5;
+	font-size: 12px;
+	line-height: 1.5;
 }
 </style>

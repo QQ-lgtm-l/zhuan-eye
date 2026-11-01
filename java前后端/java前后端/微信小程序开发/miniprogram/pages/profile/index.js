@@ -1,9 +1,9 @@
 Page({
   data: {
     userInfo: null,
-    avatarUrl: '',
     menuItems: [
-      { id: 'edit', name: '编辑资料', icon: '✏️', color: '#0D47A1' },
+      { id: 'smartChat', name: '智能问答', icon: '💬', color: '#245843', iconImage: '/images/ui/message.png' },
+      { id: 'edit', name: '编辑资料', icon: '✏️', color: '#1E88E5' },
       { id: 'help', name: '帮助中心', icon: '❓', color: '#7E57C2' },
       { id: 'about', name: '关于我们', icon: 'ℹ️', color: '#00ACC1' }
     ],
@@ -33,16 +33,24 @@ Page({
       wx.reLaunch({ url: '/pages/login/index' });
       return;
     }
-    let avatarUrl = userInfo.avatar || '';
-    if (avatarUrl && avatarUrl.indexOf('http') !== 0) {
-      avatarUrl = avatarUrl.indexOf('/') === 0 ? `${app.globalData.baseUrl}${avatarUrl}` : avatarUrl;
+    const menuItems = [
+      { id: 'smartChat', name: '智能问答', icon: '💬', color: '#245843', iconImage: '/images/ui/message.png' },
+      { id: 'edit', name: '编辑资料', icon: '✏️', color: '#1E88E5' },
+      { id: 'help', name: '帮助中心', icon: '❓', color: '#7E57C2' },
+      { id: 'about', name: '关于我们', icon: 'ℹ️', color: '#00ACC1' }
+    ];
+    if (userInfo.role === '管理员' || userInfo.role === 'admin') {
+      // 放到菜单最底下，避免占在“编辑资料”前面。
+      menuItems.push({ id: 'userManage', name: '用户管理', icon: '👥', color: '#286a60' });
     }
-    this.setData({ userInfo, avatarUrl });
+    this.setData({ userInfo, menuItems });
   },
 
   navigateTo(e) {
     const id = e.currentTarget.dataset.id;
     const paths = {
+      smartChat: '/pages/smartChat/index',
+      userManage: '/pages/userManage/index',
       edit: '/pages/profile/edit',
       help: '/pages/profile/help',
       about: '/pages/profile/about'

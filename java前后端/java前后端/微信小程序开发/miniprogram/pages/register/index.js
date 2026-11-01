@@ -3,14 +3,19 @@ Page({
     name: "",
     tel: "",
     code: "",
-    role: "现场施工人员",
-    roleIndex: 4,
-    roleOpen: false,
-    roleOptions: ["项目经理", "专职安全员", "巡检员", "施工班组长", "现场施工人员"],
     countdown: 0,
     sending: false,
     submitting: false,
     demoTip: "",
+    nameFocused: false,
+    telFocused: false,
+    codeFocused: false,
+  },
+
+  onLoad(options) {
+    if (options && options.phone) {
+      this.setData({ tel: decodeURIComponent(options.phone).replace(/\D/g, "").slice(0, 11) });
+    }
   },
 
   onUnload() {
@@ -24,25 +29,22 @@ Page({
     this.setData({ name: e.detail.value });
   },
 
+  onNameFocus() { this.setData({ nameFocused: true }); },
+  onNameBlur() { this.setData({ nameFocused: false }); },
+
   onTelInput(e) {
-    this.setData({ tel: e.detail.value, demoTip: "" });
+    this.setData({ tel: e.detail.value.replace(/\D/g, "").slice(0, 11), demoTip: "" });
   },
+
+  onTelFocus() { this.setData({ telFocused: true }); },
+  onTelBlur() { this.setData({ telFocused: false }); },
 
   onCodeInput(e) {
-    this.setData({ code: e.detail.value });
+    this.setData({ code: e.detail.value.replace(/\D/g, "").slice(0, 6) });
   },
 
-  toggleRole() {
-    this.setData({ roleOpen: !this.data.roleOpen });
-  },
-
-  closeRole() {
-    this.setData({ roleOpen: false });
-  },
-
-  selectRole(e) {
-    this.setData({ role: e.currentTarget.dataset.role, roleOpen: false });
-  },
+  onCodeFocus() { this.setData({ codeFocused: true }); },
+  onCodeBlur() { this.setData({ codeFocused: false }); },
 
   startCountdown() {
     if (this.timer) clearInterval(this.timer);
@@ -57,6 +59,7 @@ Page({
     }, 1000);
   },
 
+  // 与 Web 端一致：调用后端 /user/phone-code，演示模式自动回填验证码
   sendCode() {
     const tel = (this.data.tel || "").trim();
     if (this.data.countdown > 0 || this.data.sending) return;
@@ -64,25 +67,32 @@ Page({
       wx.showToast({ title: "请输入正确的手机号", icon: "none" });
       return;
     }
-    this.setData({ sending: true });
+
+    this.setData({ sending: true, demoTip: "" });
     const app = getApp();
+
     wx.request({
       url: `${app.globalData.baseUrl}/user/phone-code`,
       method: "POST",
+      header: { "Content-Type": "application/json" },
       data: { phone: tel },
       success: (res) => {
         const result = res.data || {};
         if (result.code == 0 && result.data) {
+          const data = result.data;
+          const tip = data.mock
+            ? `演示模式：验证码 ${data.code} 已自动填入`
+            : "验证码已发送，请查看短信";
           this.setData({
-            code: result.data.code,
-            demoTip: result.data.message || `演示模式：验证码 ${result.data.code} 已自动填入`,
+            code: data.mock ? String(data.code) : this.data.code,
+            demoTip: tip,
           });
           this.startCountdown();
         } else {
           wx.showToast({ title: result.msg || "验证码发送失败", icon: "none" });
         }
       },
-      fail: () => wx.showToast({ title: "网络请求失败", icon: "none" }),
+      fail: () => wx.showToast({ title: "网络请求失败，请检查后端服务", icon: "none" }),
       complete: () => this.setData({ sending: false }),
     });
   },
@@ -91,6 +101,7 @@ Page({
     const name = (this.data.name || "").trim();
     const tel = (this.data.tel || "").trim();
     const code = (this.data.code || "").trim();
+
     if (!name) {
       wx.showToast({ title: "请输入姓名", icon: "none" });
       return;
@@ -100,39 +111,41 @@ Page({
       return;
     }
     if (!/^\d{6}$/.test(code)) {
-      wx.showToast({ title: "请输入 6 位验证码", icon: "none" });
+      wx.showToast({ title: "请输入6位验证码", icon: "none" });
       return;
     }
     if (this.data.submitting) return;
+
     this.setData({ submitting: true });
     wx.showLoading({ title: "注册中..." });
     const app = getApp();
+
     wx.request({
       url: `${app.globalData.baseUrl}/user/quick-register`,
       method: "POST",
-      data: { name, phone: tel, code, role: this.data.role },
+      header: { "Content-Type": "application/json" },
+      data: { name, phone: tel, code },
       success: (res) => {
+        wx.hideLoading();
         const result = res.data || {};
         if (result.code == 0 && result.data) {
-          const { username, password, role } = result.data;
-          wx.hideLoading();
+          const data = result.data;
           wx.showModal({
             title: "注册成功",
-            content: `账号：${username}\n初始密码：${password}\n职位：${role}\n登录后请在个人中心修改密码。`,
+            content: `手机号：${data.tel || tel}\n账号：${data.username}\n初始密码：${data.password || "123456"}\n默认职位：${data.role || "现场施工人员"}，管理员可在后台调整。`,
             showCancel: false,
             confirmText: "去登录",
             success: () => {
-              wx.reLaunch({ url: `/pages/login/index?u=${encodeURIComponent(username)}&r=${encodeURIComponent(role)}` });
+              wx.reLaunch({ url: `/pages/login/index?p=${encodeURIComponent(data.tel || tel)}` });
             },
           });
         } else {
-          wx.hideLoading();
           wx.showToast({ title: result.msg || "注册失败", icon: "none" });
         }
       },
       fail: () => {
         wx.hideLoading();
-        wx.showToast({ title: "网络请求失败", icon: "none" });
+        wx.showToast({ title: "网络请求失败，请检查后端服务", icon: "none" });
       },
       complete: () => this.setData({ submitting: false }),
     });

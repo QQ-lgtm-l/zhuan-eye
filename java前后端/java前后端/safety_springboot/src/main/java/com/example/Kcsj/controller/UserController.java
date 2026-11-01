@@ -63,21 +63,29 @@ public class UserController {
 
     @PostMapping("/login")
     public Result<?> login(@RequestBody User userParam) {
-        System.out.println(userParam);
-        try{
-            User userPwd = userMapper.selectByName(userParam.getUsername());
-            QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-            queryWrapper.eq("username", userParam.getUsername());
-            queryWrapper.eq("password", userPwd.getPassword());
-            User res = userMapper.selectOne(queryWrapper);
-            if (!Objects.equals(userParam.getPassword(), userPwd.getPassword())) {
-                return Result.error("-1", "密码错误！");
-            } else {
-                // 登录不再要求选择角色，角色以数据库为准（避免选错角色登不上去）
-                return Result.success(res);
+        try {
+            String phone = userParam.getTel() == null ? "" : userParam.getTel().trim();
+            String username = userParam.getUsername() == null ? "" : userParam.getUsername().trim();
+            User user = null;
+            if (StrUtil.isNotBlank(phone)) {
+                user = userMapper.selectOne(Wrappers.<User>lambdaQuery()
+                        .eq(User::getTel, phone).last("limit 1"));
             }
-        }catch (Exception e){
-            return Result.error("-1", "用户名不存在！");
+            // 兼容管理员用账号登录，普通用户走手机号
+            if (user == null && StrUtil.isNotBlank(username)) {
+                user = userMapper.selectByName(username);
+            }
+            if (user == null) {
+                return Result.error("-1", "该手机号还未注册，请先注册");
+            }
+            if (!Objects.equals(userParam.getPassword(), user.getPassword())) {
+                return Result.error("-1", "密码错误！");
+            }
+            // 登录只认手机号/账号，角色从数据库带出，不再让用户选择
+            user.setPassword(null);
+            return Result.success(user);
+        } catch (Exception e) {
+            return Result.error("-1", "登录失败：" + e.getMessage());
         }
     }
 
@@ -158,6 +166,15 @@ public class UserController {
     public Result<?> updates(@RequestBody User user) {
         User existing = user.getId() == null ? null : userMapper.selectById(user.getId());
         if (existing != null) {
+            // 系统只保留唯一管理员 admin，禁止把 admin 降级或把别人提升为管理员
+            if ("admin".equalsIgnoreCase(existing.getUsername())) {
+                if (user.getRole() != null && !"管理员".equals(user.getRole())) {
+                    return Result.error("-1", "系统唯一管理员不能修改角色");
+                }
+                user.setRole("管理员");
+            } else if ("管理员".equals(user.getRole())) {
+                return Result.error("-1", "系统只允许一个管理员账号");
+            }
             if (user.getEmail() != null && !user.getEmail().trim().equalsIgnoreCase(
                     existing.getEmail() == null ? "" : existing.getEmail().trim())
                     && !emailCodeService.isValidEmail(user.getEmail().trim())) {
@@ -181,6 +198,10 @@ public class UserController {
 
     @DeleteMapping("/{id}")
     public Result<?> delete(@PathVariable int id) {
+        User existing = userMapper.selectById(id);
+        if (existing != null && "admin".equalsIgnoreCase(existing.getUsername())) {
+            return Result.error("-1", "系统唯一管理员不能删除");
+        }
         userMapper.deleteById(id);
         return Result.success();
     }
@@ -191,8 +212,14 @@ public class UserController {
         if (StrUtil.isBlank(user.getUsername())) {
             return Result.error("-1", "请输入账号");
         }
+        if (StrUtil.isBlank(user.getTel())) {
+            return Result.error("-1", "请输入手机号");
+        }
         if (StrUtil.isBlank(user.getPassword())) {
             return Result.error("-1", "请输入密码");
+        }
+        if ("管理员".equals(user.getRole())) {
+            return Result.error("-1", "系统只允许一个管理员账号");
         }
         if (StrUtil.isNotBlank(user.getEmail()) && !emailCodeService.isValidEmail(user.getEmail())) {
             return Result.error("-1", "邮箱格式不正确");

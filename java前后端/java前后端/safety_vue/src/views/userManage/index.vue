@@ -1,6 +1,8 @@
 <template>
 	<div class="system-role-container layout-padding">
 		<div class="system-role-padding layout-padding-auto layout-padding-view">
+			<el-tabs v-model="activeTab" class="user-tabs">
+				<el-tab-pane label="用户列表" name="list">
 			<div class="system-user-search mb15">
 				<el-input
 					v-model="state.tableData.param.search"
@@ -53,8 +55,8 @@
 				</el-table-column>
 				<el-table-column label="操作" width="150">
 					<template #default="scope">
-						<el-button size="small" text type="primary" @click="onOpenEditRole('edit', scope.row)">修改</el-button>
-						<el-button size="small" text type="primary" @click="onRowDel(scope.row)">删除</el-button>
+						<el-button v-if="canManageRow(scope.row)" size="small" text type="primary" @click="onOpenEditRole('edit', scope.row)">修改</el-button>
+						<el-button v-if="canManageRow(scope.row)" size="small" text type="primary" @click="onRowDel(scope.row)">删除</el-button>
 					</template>
 				</el-table-column>
 			</el-table>
@@ -71,6 +73,21 @@
 				:total="state.tableData.total"
 			>
 			</el-pagination>
+				</el-tab-pane>
+				<el-tab-pane label="角色权限" name="matrix">
+					<div class="matrix-tip">
+						系统共 6 个岗位；只有唯一管理员 <b>admin</b> 可以修改角色，修改后对方重新登录生效。
+					</div>
+					<el-table :data="matrixRows" border style="width: 100%">
+						<el-table-column prop="module" label="功能模块" width="180" fixed />
+						<el-table-column v-for="role in matrixRoles" :key="role" :label="role" align="center" min-width="110">
+							<template #default="scope">
+								<span :class="scope.row[role] === '✅' ? 'matrix-yes' : 'matrix-no'">{{ scope.row[role] }}</span>
+							</template>
+						</el-table-column>
+					</el-table>
+				</el-tab-pane>
+			</el-tabs>
 		</div>
 		<RoleDialog ref="roleDialogRef" @refresh="getTableData()" />
 	</div>
@@ -79,11 +96,37 @@
 <script setup lang="ts" name="systemRole">
 import { defineAsyncComponent, reactive, onMounted, ref } from 'vue';
 import { ElMessageBox, ElMessage } from 'element-plus';
+import Cookies from 'js-cookie';
 import request from '/@/utils/request';
 import { resolveAvatar } from '/@/utils/avatar';
 
+// 系统只保留唯一管理员 admin，只有管理员能管理账号
+const currentRole = Cookies.get('role') || '';
+const currentUsername = Cookies.get('userName') || '';
+const isAdmin = currentRole === '管理员';
+const canManageRow = (row: any) => {
+	if (!row || !isAdmin) return false;
+	return row.username !== currentUsername;
+};
+
 // 引入组件
 const RoleDialog = defineAsyncComponent(() => import('./dialog.vue'));
+
+const activeTab = ref('list');
+const matrixRoles = ['管理员', '项目经理', '专职安全员', '巡检员', '施工班组长', '现场施工人员'];
+const YES = '✅';
+const NO = '—';
+const matrixRows = [
+	{ module: '用户管理 / 修改角色', 管理员: YES, 项目经理: NO, 专职安全员: NO, 巡检员: NO, 施工班组长: NO, 现场施工人员: NO },
+	{ module: '智能问答', 管理员: YES, 项目经理: YES, 专职安全员: YES, 巡检员: YES, 施工班组长: YES, 现场施工人员: YES },
+	{ module: '发起图像/视频检测', 管理员: YES, 项目经理: YES, 专职安全员: YES, 巡检员: YES, 施工班组长: NO, 现场施工人员: NO },
+	{ module: '查看全部检测记录', 管理员: YES, 项目经理: YES, 专职安全员: YES, 巡检员: NO, 施工班组长: NO, 现场施工人员: NO },
+	{ module: '审核整改方案', 管理员: YES, 项目经理: YES, 专职安全员: YES, 巡检员: NO, 施工班组长: NO, 现场施工人员: NO },
+	{ module: '督办逾期工单', 管理员: YES, 项目经理: YES, 专职安全员: YES, 巡检员: NO, 施工班组长: NO, 现场施工人员: NO },
+	{ module: '处理本人工单', 管理员: YES, 项目经理: YES, 专职安全员: YES, 巡检员: YES, 施工班组长: YES, 现场施工人员: YES },
+	{ module: '上传整改图片', 管理员: YES, 项目经理: YES, 专职安全员: YES, 巡检员: YES, 施工班组长: YES, 现场施工人员: YES },
+	{ module: '消息中心 / 个人中心', 管理员: YES, 项目经理: YES, 专职安全员: YES, 巡检员: YES, 施工班组长: YES, 现场施工人员: YES },
+];
 
 // 定义变量内容
 const roleDialogRef = ref();
@@ -224,5 +267,25 @@ onMounted(() => {
 	font-weight: 600;
 	color: #fff;
 	background: linear-gradient(135deg, #1565c0, #42a5f5);
+}
+.user-tabs {
+	:deep(.el-tabs__header) {
+		margin-bottom: 14px;
+	}
+}
+.matrix-tip {
+	margin-bottom: 12px;
+	color: #7b8ba3;
+	font-size: 13px;
+	b {
+		color: #0d47a1;
+	}
+}
+.matrix-yes {
+	color: #2e7d32;
+	font-weight: 700;
+}
+.matrix-no {
+	color: #c5d0de;
 }
 </style>
