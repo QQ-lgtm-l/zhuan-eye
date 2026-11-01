@@ -36,6 +36,13 @@ def highest_hazard_level(labels):
     return best
 
 
+def highest_level_label(levels):
+    """多个已分级结果取最高等级；用于图片多隐患的顶层汇总。"""
+    if not levels:
+        return ""
+    return max(levels, key=lambda level: _LEVEL_SEVERITY.get(level, 1))
+
+
 class SafetyDetectionApp:
     def __init__(self, host='0.0.0.0', port=5000):
         self.app = Flask(__name__)
@@ -306,6 +313,8 @@ class SafetyDetectionApp:
                 self.data["label"] = ["未检测到安全隐患"]
                 self.data["suggestion"] = "未检测到安全隐患"
                 self.data["hazard_level"] = ""
+                self.data["hazards"] = []
+                self.data["hazard_count"] = 0
                 self.data["rectify_task"] = {}
                 self.data["chat_records"] = []
                 self.data["ledger_data"] = {}
@@ -323,23 +332,45 @@ class SafetyDetectionApp:
             self.socketio.emit('message', {'data': '【协同沟通Agent】发起多方通知...'})
             self.socketio.emit('message', {'data': '【台账生成Agent】自动归档台账...'})
 
-            # 对每个隐患分别运行Agent流水线
+            # 对每个隐患分别运行Agent流水线，并保留每条隐患的独立结果
             all_final_states = []
             all_suggestions = []
-            for h in hazards:
+            hazard_records = []
+            for idx, h in enumerate(hazards):
                 print(f"🔍 处理隐患：{h['hazard_type']} (conf={h['confidence']})")
                 init_state = HazardState(hazard_raw=h)
                 final_state = safety_workflow.invoke(init_state)
                 all_final_states.append(final_state)
+
                 chat_records = final_state.get('chat_records', [])
                 if chat_records and len(chat_records) > 0:
-                    all_suggestions.append(chat_records[0].get('msg', ''))
+                    suggestion = chat_records[0].get('msg', '')
                 else:
-                    all_suggestions.append(f"【{h['hazard_type']}】请立即整改。")
+                    suggestion = f"【{h['hazard_type']}】请立即整改。"
+                all_suggestions.append(suggestion)
+
+                task = final_state.get('rectify_task', {}) or {}
+                hazard_records.append({
+                    "instance_id": f"H{idx + 1:02d}",
+                    "hazard_type": h['hazard_type'],
+                    "level": final_state.get('hazard_level', ''),
+                    "level_code": final_state.get('level_code', ''),
+                    "confidence": h['confidence'],
+                    "bbox": h.get('bbox', []),
+                    "inferred": bool(h.get('inferred', False)),
+                    "source": h.get('source', ''),
+                    "duty_person": task.get('duty_person', ''),
+                    "response_timeout": task.get('response_timeout', ''),
+                    "rectify_timeout": task.get('rectify_timeout', ''),
+                    "suggestion": suggestion,
+                    "clause_ids": [],
+                })
                 print(f"🔍 Agent流水线完成: {h['hazard_type']}, hazard_level={final_state.get('hazard_level', 'N/A')}")
 
-            # 使用第一个隐患的final_state作为主状态（保持兼容性）
+            # 顶层字段保留第一条，兼容旧接口；新增 hazards[] 给多目标消费
             final_state = all_final_states[0] if all_final_states else {}
+            self.data["hazards"] = hazard_records
+            self.data["hazard_count"] = len(hazard_records)
 
             # ========== 绘制标注图（含推断的隐患框） ==========
             import cv2
@@ -400,8 +431,9 @@ class SafetyDetectionApp:
             self.data["confidence"] = hazard_confs
             self.data["label"] = hazard_labels
             
-            # 安全访问 final_state，添加默认值
-            self.data["hazard_level"] = final_state.get('hazard_level', '')
+            # 顶层取最高等级；详情仍保留在 hazards[] 每条记录里
+            level_values = [fs.get('hazard_level', '') for fs in all_final_states]
+            self.data["hazard_level"] = highest_level_label(level_values) or final_state.get('hazard_level', '')
             self.data["rectify_task"] = final_state.get('rectify_task', {})
             self.data["chat_records"] = final_state.get('chat_records', [])
             self.data["ledger_data"] = final_state.get('ledger_data', {})
