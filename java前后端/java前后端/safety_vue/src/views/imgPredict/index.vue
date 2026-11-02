@@ -8,7 +8,7 @@
 				<div class="weight">
 					<el-select v-model="weight" placeholder="请选择识别模型" size="large" style="width: 220px" filterable teleported>
 						<el-option v-for="item in state.weight_items" :key="item.value" :label="item.label"
-							:value="item.value" />
+							:value="item.value" :disabled="item.disabled" />
 					</el-select>
 				</div>
 				<div class="conf" style="margin-left: 20px;display: flex; flex-direction: row;">
@@ -25,7 +25,7 @@
 						class="predict-button">PDF导出</el-button>
 				</div>
 			</div>
-			<div style="width: 100%; display: flex; flex-direction: row; gap: 15px; margin-bottom: 20px; margin-top: 15px; align-items: stretch;">
+			<div class="predict-main-row">
 			<el-card shadow="hover" class="card">
 				<el-upload v-model="state.img" ref="uploadFile" class="avatar-uploader"
 					action="/api/files/upload" :show-file-list="false"
@@ -78,23 +78,23 @@
 								<span class="collapse-title">隐患实例清单（{{ state.hazards.length }} 条，含知识库依据）</span>
 							</template>
 							<el-table :data="state.hazards" style="width: 100%" max-height="320" empty-text="暂无隐患实例">
-								<el-table-column prop="instance_id" label="编号" width="65" align="center" />
-								<el-table-column prop="hazard_type" label="隐患类型" min-width="130" />
-								<el-table-column label="等级" width="95" align="center">
+								<el-table-column prop="instance_id" label="编号" width="52" align="center" />
+								<el-table-column prop="hazard_type" label="隐患类型" min-width="105" show-overflow-tooltip />
+								<el-table-column label="等级" width="82" align="center">
 									<template #default="scope">
 										<el-tag :type="scope.row.level && scope.row.level.includes('Ⅰ') ? 'danger' : scope.row.level && scope.row.level.includes('Ⅱ') ? 'warning' : 'info'" size="small">
 											{{ scope.row.level || '-' }}
 										</el-tag>
 									</template>
 								</el-table-column>
-								<el-table-column prop="confidence" label="置信度" width="75" align="center" />
-								<el-table-column label="知识库" width="150">
+								<el-table-column prop="confidence" label="置信度" width="62" align="center" />
+								<el-table-column label="知识库" width="125" show-overflow-tooltip>
 									<template #default="scope">
 										<span v-if="scope.row.kb_id">{{ scope.row.kb_id }} · {{ scope.row.standard || '条款待补' }}</span>
 										<span v-else style="color: #909399;">规则兜底</span>
 									</template>
 								</el-table-column>
-								<el-table-column prop="rectify_measure" label="整改措施" min-width="200" show-overflow-tooltip />
+								<el-table-column prop="rectify_measure" label="整改措施" min-width="145" show-overflow-tooltip />
 							</el-table>
 						</el-collapse-item>
 						<el-collapse-item name="detail">
@@ -219,7 +219,17 @@ const getData = () => {
 	request.get('/api/flask/file_names').then((res) => {
 		if (res.code == 0) {
 			res.data = JSON.parse(res.data);
-			state.weight_items = res.data.weight_items;
+			const modelLabels: Record<string, string> = {
+				'construction_safety.pt': '施工安全隐患检测（17 类，主模型）',
+				'edge_cls.pt': '临边防护分类（未接入，勿选）',
+				'yolov8s.pt': '通用 COCO 检测（仅内部补充）'
+			};
+			state.weight_items = (res.data.weight_items || []).map((item: any) => ({
+				...item,
+				label: modelLabels[item.value] || item.label,
+				disabled: item.value !== 'construction_safety.pt'
+			}));
+			if (!weight.value) weight.value = 'construction_safety.pt';
 		} else {
 			ElMessage.error(res.msg);
 		}
@@ -402,7 +412,7 @@ onMounted(() => {
 	overflow: auto;
 
 	.system-predict-padding {
-		padding: 0 100px;
+		padding: 0 24px;
 		overflow-y: auto;
 
 		.el-table {
@@ -423,8 +433,18 @@ onMounted(() => {
 	font-size: 20px;
 }
 
+.predict-main-row {
+	width: 100%;
+	display: flex;
+	flex-direction: row;
+	gap: 15px;
+	margin-bottom: 20px;
+	margin-top: 15px;
+	align-items: stretch;
+}
+
 .card {
-	flex: 1 1 55%;
+	flex: 1 1 50%;
 	min-width: 0;
 	border-radius: 10px;
 	display: flex;
@@ -532,8 +552,9 @@ onMounted(() => {
 }
 
 .result-section {
-	flex: 1 1 45%;
+	flex: 1 1 50%;
 	min-width: 0;
+	overflow: hidden;
 	margin-left: 0;
 	text-align: center;
 	display: flex;
@@ -631,5 +652,22 @@ onMounted(() => {
 
 :deep(.el-slider__button) {
 	border-color: #1E88E5; // 滑块按钮
+}
+
+@media (max-width: 1500px) {
+	.predict-main-row {
+		flex-direction: column;
+	}
+
+	.predict-main-row .card,
+	.predict-main-row .result-section {
+		flex: 1 1 auto;
+		width: 100%;
+	}
+
+	.avatar-uploader,
+	.avatar-uploader-icon-wrapper {
+		height: 420px;
+	}
 }
 </style>
