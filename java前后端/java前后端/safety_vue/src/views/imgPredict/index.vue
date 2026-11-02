@@ -435,8 +435,8 @@ onMounted(() => {
 
 .predict-main-row {
 	width: 100%;
-	display: flex;
-	flex-direction: row;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 	gap: 15px;
 	margin-bottom: 20px;
 	margin-top: 15px;
@@ -656,12 +656,11 @@ onMounted(() => {
 
 @media (max-width: 1500px) {
 	.predict-main-row {
-		flex-direction: column;
+		grid-template-columns: minmax(0, 1fr);
 	}
 
 	.predict-main-row .card,
 	.predict-main-row .result-section {
-		flex: 1 1 auto;
 		width: 100%;
 	}
 
