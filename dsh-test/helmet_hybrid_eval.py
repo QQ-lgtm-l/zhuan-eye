@@ -1,8 +1,8 @@
 # 离线评估 helmet_cls 在房建 test 集上的 person 级判断
 # 依赖：construction_safety.pt + runs/helmet/helmet_cls/weights/best.pt
+import os
 from pathlib import Path
 
-import numpy as np
 from PIL import Image
 from ultralytics import YOLO
 
@@ -10,7 +10,8 @@ ROOT = Path(r"D:\workspace\factory\工地安全多角色协同大模型Agent\工
 IMAGES = ROOT / "datasets" / "construction-site-safety" / "images" / "test"
 LABELS = ROOT / "datasets" / "construction-site-safety" / "labels" / "test"
 DET = YOLO(str(ROOT / "weights" / "construction_safety.pt"))
-CLS = YOLO(r"D:\workspace\factory\runs\helmet\helmet_cls\weights\best.pt")
+CLS_PATH = os.environ.get("HELMET_CLS", r"D:\workspace\factory\runs\helmet\helmet_cls\weights\best.pt")
+CLS = YOLO(CLS_PATH)
 NAMES = DET.names
 HEAD_FRAC = 0.25
 
