@@ -6,6 +6,7 @@ import com.example.Kcsj.mapper.ImgRecordsMapper;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.Collections;
@@ -30,6 +31,7 @@ public class ImgRecordsController {
             if (!lable.isEmpty()) {
                 records = records.stream().filter(r -> r.getLabel().contains(lable)).collect(Collectors.toList());
             }
+            records.sort(Comparator.comparing(ImgRecords::getId).reversed());
             int total = records.size();
             int start = (pageNum - 1) * pageSize;
             int end = Math.min(start + pageSize, total);
@@ -47,6 +49,7 @@ public class ImgRecordsController {
     public Result<?> findAll() {
         try {
             List<ImgRecords> records = imgRecordsMapper.selectList(null);
+            records.sort(Comparator.comparing(ImgRecords::getId).reversed());
             return Result.success(records);
         } catch (Exception e) {
             return Result.error("-1", "Error: " + e.getMessage());
