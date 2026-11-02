@@ -517,6 +517,8 @@ onMounted(() => {
 }
 
 .detail-collapse {
+	width: 100%;
+	align-self: stretch;
 	margin-top: 16px;
 	border: 1px solid #90CAF9;
 	border-radius: 8px;
