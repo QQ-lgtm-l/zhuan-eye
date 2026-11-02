@@ -33,14 +33,14 @@
 				<el-table-column prop="inputVideo" label="原视频" width="180" align="center">
 					<template #default="scope">
 						<video class="video" controls style="width: 160px; height: 100px;">
-							<source :src="scope.row.inputVideo" type="video/mp4" />
+							<source :src="resolveMediaUrl(scope.row.inputVideo)" type="video/mp4" />
 						</video>
 					</template>
 				</el-table-column>
 				<el-table-column prop="outVideo" label="处理结果" width="180" align="center">
 					<template #default="scope">
 						<video class="video" preload="auto" controls style="width: 160px; height: 100px;">
-							<source :src="scope.row.outVideo" type="video/mp4" />
+							<source :src="resolveMediaUrl(scope.row.outVideo)" type="video/mp4" />
 						</video>
 					</template>
 				</el-table-column>
@@ -79,6 +79,7 @@
 import { reactive, onMounted, ref } from 'vue';
 import { ElMessageBox, ElMessage } from 'element-plus';
 import request from '/@/utils/request';
+import { resolveMediaUrl } from '/@/utils/media';
 import { useUserInfo } from '/@/stores/userInfo';
 import { normalizeLevel, levelTagType } from '/@/utils/hazardLevel';
 import { storeToRefs } from 'pinia';

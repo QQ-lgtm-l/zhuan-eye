@@ -95,9 +95,9 @@ public class FileController {
 
         try {
             if (file.exists() && file.isFile()) {
-                // 下载文件夹中的指定文件
-                response.addHeader("Content-Disposition", "attachment;filename=" + URLEncoder.encode(filename, "UTF-8"));
-                response.setContentType("application/octet-stream");
+                // 图片/视频需要浏览器内联显示，不能强制 attachment
+                response.setContentType(contentType(filename));
+                response.addHeader("Content-Disposition", "inline;filename=" + URLEncoder.encode(filename, "UTF-8"));
                 byte[] bytes = FileUtil.readBytes(file);
                 try (OutputStream os = response.getOutputStream()) {
                     os.write(bytes);
@@ -147,8 +147,8 @@ public class FileController {
                 String filePath = basePath + flag;
                 File file = new File(filePath);
                 if (file.exists() && file.isFile()) {
-                    response.addHeader("Content-Disposition", "attachment;filename=" + URLEncoder.encode(file.getName(), "UTF-8"));
-                    response.setContentType("application/octet-stream");
+                    response.setContentType(contentType(file.getName()));
+                    response.addHeader("Content-Disposition", "inline;filename=" + URLEncoder.encode(file.getName(), "UTF-8"));
                     byte[] bytes = FileUtil.readBytes(file);
                     try (OutputStream os = response.getOutputStream()) {
                         os.write(bytes);
@@ -160,8 +160,8 @@ public class FileController {
                     String matchedFile = fileNames.stream().filter(name -> name.startsWith(flag + "_")).findFirst().orElse("");
                     if (StrUtil.isNotEmpty(matchedFile)) {
                         file = new File(basePath + matchedFile);
-                        response.addHeader("Content-Disposition", "attachment;filename=" + URLEncoder.encode(matchedFile, "UTF-8"));
-                        response.setContentType("application/octet-stream");
+                        response.setContentType(contentType(matchedFile));
+                        response.addHeader("Content-Disposition", "inline;filename=" + URLEncoder.encode(matchedFile, "UTF-8"));
                         byte[] bytes = FileUtil.readBytes(file);
                         try (OutputStream os = response.getOutputStream()) {
                             os.write(bytes);
@@ -176,5 +176,19 @@ public class FileController {
         } catch (IOException e) {
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         }
+    }
+
+    private String contentType(String fileName) {
+        String name = fileName == null ? "" : fileName.toLowerCase();
+        if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+        if (name.endsWith(".png")) return "image/png";
+        if (name.endsWith(".gif")) return "image/gif";
+        if (name.endsWith(".webp")) return "image/webp";
+        if (name.endsWith(".bmp")) return "image/bmp";
+        if (name.endsWith(".mp4")) return "video/mp4";
+        if (name.endsWith(".webm")) return "video/webm";
+        if (name.endsWith(".ogg")) return "video/ogg";
+        if (name.endsWith(".pdf")) return "application/pdf";
+        return "application/octet-stream";
     }
 }

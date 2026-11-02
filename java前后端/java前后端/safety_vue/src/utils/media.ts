@@ -9,8 +9,8 @@ export function resolveMediaUrl(url?: string | null): string {
 	if (!value) return '';
 	// 后端文件服务 9999 -> /api（vite 代理会去掉 /api 前缀），兼容局域网 IP
 	value = value.replace(/^https?:\/\/[^/]+:9999/i, '/api');
-	// Flask 推理服务 5000 -> /flask
-	value = value.replace(/^https?:\/\/(127\.0\.0\.1|localhost):5000/i, '/flask');
+	// Flask 推理服务 5000 -> /flask（换机器/局域网访问时也不能写死 localhost）
+	value = value.replace(/^https?:\/\/[^/]+:5000/i, '/flask');
 	return value;
 }
 

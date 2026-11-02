@@ -29,7 +29,7 @@
 				<!-- 左侧区域的视频 -->
 				<div class="left" :style="{ width: leftWidth + '%' }">
 					<video class="video" v-if="state.form.inputVideo" preload="auto" controls>
-						<source :src="state.form.inputVideo" type="video/mp4" />
+						<source :src="resolveMediaUrl(state.form.inputVideo)" type="video/mp4" />
 					</video>
 				</div>
 
@@ -39,7 +39,7 @@
 				<!-- 右侧区域的视频 -->
 				<div class="right" :style="{ width: 100 - leftWidth + '%' }">
 					<video class="video" preload="auto" v-if="state.form.outVideo" controls>
-						<source :src="state.form.outVideo" type="video/mp4" />
+						<source :src="resolveMediaUrl(state.form.outVideo)" type="video/mp4" />
 					</video>
 				</div>
 			</div>
@@ -52,6 +52,7 @@
 import { reactive, ref, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import request from '/@/utils/request';
+import { resolveMediaUrl } from '/@/utils/media';
 import { useRoute } from 'vue-router';
 
 const route = useRoute();
