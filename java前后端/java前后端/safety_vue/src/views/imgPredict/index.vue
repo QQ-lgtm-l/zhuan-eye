@@ -167,7 +167,7 @@ import { SocketService } from '/@/utils/socket';
 import { resolveMediaUrl } from '/@/utils/media';
 
 const imageUrl = ref('');
-const conf = ref(50);
+const conf = ref(25);
 const weight = ref('');
 const uploadFile = ref<UploadInstance>();
 const stores = useUserInfo();

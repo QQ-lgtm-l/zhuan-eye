@@ -15,6 +15,7 @@ torch.load = _patched_load
 from ultralytics import YOLO
 import os
 import time
+import cv2
 import numpy as np
 
 class EnhancedMultiHazardDetector:
@@ -43,8 +44,8 @@ class EnhancedMultiHazardDetector:
     # 中性类别
     NEUTRAL_CLASSES = {'person', 'none'}
 
-    def __init__(self, primary_model_path: str, coco_model_path: str = None):
-        """初始化双模型"""
+    def __init__(self, primary_model_path: str, coco_model_path: str = None, edge_model_path: str = None):
+        """初始化双模型 + 临边防护分类器"""
         self.primary_model = YOLO(primary_model_path)
         self.primary_names = self.primary_model.names
 
@@ -57,6 +58,21 @@ class EnhancedMultiHazardDetector:
             print(f"✅ 双模型集成: 主模型({len(self.primary_names)}类) + COCO模型({len(self.coco_names)}类)")
         else:
             print(f"⚠️ 仅使用主模型: {len(self.primary_names)}类")
+
+        # 临边防护分类器（M4）：edge_no_protection / edge_protection / no_edge
+        self.edge_model = None
+        self.edge_names = {}
+        if edge_model_path is None:
+            edge_model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'weights', 'edge_cls.pt')
+        # 临边分类器目前仍是实验模型：验证集防护门误报偏高，默认不启用
+        edge_enabled = os.environ.get('ENABLE_EDGE_CLS', '0') == '1'
+        if edge_enabled and edge_model_path and os.path.exists(edge_model_path):
+            try:
+                self.edge_model = YOLO(edge_model_path)
+                self.edge_names = self.edge_model.names
+                print(f"✅ 临边防护分类器: {self.edge_names}")
+            except Exception as e:
+                print(f"⚠️ 临边防护分类器加载失败: {e}")
 
     def _classify(self, class_name):
         """分类检测目标: hazard/normal/neutral/unknown"""
@@ -98,6 +114,23 @@ class EnhancedMultiHazardDetector:
         mid_y = y1 + (y2 - y1) * 0.5
         return [x1, y1, x2, mid_y]
 
+    def _is_plausible_hardhat(self, det):
+        """
+        过滤明显不是安全帽的 hardhat 误检。
+        该主模型会把光头/人脸判成 hardhat，典型表现是框“竖长”；
+        正常安全帽框通常宽大于高。只用于判断“是否戴帽”，不删除检测结果。
+        """
+        try:
+            x1, y1, x2, y2 = det['bbox']
+            w, h = x2 - x1, y2 - y1
+            if w <= 0 or h <= 0:
+                return False
+            if det.get('confidence', 1.0) < 0.45:
+                return False
+            return (w / h) >= 0.85
+        except Exception:
+            return True
+
     def _infer_missing_ppe(self, detections):
         """
         后处理推断：对每个person，检查是否有对应的防护装备
@@ -106,7 +139,11 @@ class EnhancedMultiHazardDetector:
         """
         inferred_hazards = []
         persons = [d for d in detections if d['class_name'].lower() in ('person', 'none')]
-        hardhats = [d for d in detections if d['class_name'].lower().replace('-', '_') in ('hardhat', 'helmet')]
+        hardhats = [
+            d for d in detections
+            if d['class_name'].lower().replace('-', '_') in ('hardhat', 'helmet')
+            and self._is_plausible_hardhat(d)
+        ]
         vests = [d for d in detections if d['class_name'].lower().replace('-', '_') in ('safety_vest', 'vest')]
 
         for person in persons:
@@ -247,6 +284,44 @@ class EnhancedMultiHazardDetector:
         deduped.sort(key=lambda x: x['confidence'], reverse=True)
         return deduped
 
+    def _infer_edge_protection(self, img_path: str, threshold: float = 0.60):
+        """整图临边防护分类：确认无防护时，产出一条覆盖整图的隐患。"""
+        if self.edge_model is None:
+            return None
+        try:
+            result = self.edge_model(img_path, imgsz=224, verbose=False)[0]
+            probs = result.probs
+            if probs is None:
+                return None
+            idx = int(probs.top1)
+            conf = float(probs.top1conf)
+            label = self.edge_names.get(idx, str(idx))
+            print(f"🪜 临边分类: {label} conf={conf:.3f}")
+            if label != 'edge_no_protection' or conf < threshold:
+                return None
+
+            img = cv2.imread(img_path)
+            if img is None:
+                return None
+            h, w = img.shape[:2]
+            return {
+                'class_id': idx,
+                'class_name': 'edge_no_protection',
+                'class_name_normalized': 'edge_no_protection',
+                'confidence': round(conf, 2),
+                'category': 'hazard',
+                'hazard_type': '临边防护缺失',
+                'is_hazard': True,
+                'bbox': [0.0, 0.0, float(w), float(h)],
+                'time': time.strftime("%Y-%m-%d %H:%M:%S"),
+                'camera_id': "现场默认摄像头",
+                'source': 'edge_cls',
+                'inferred': True,
+            }
+        except Exception as e:
+            print(f"⚠️ 临边分类失败: {e}")
+            return None
+
     def detect_image(self, img_path: str, conf_thres=0.25, imgsz=640):
         """
         增强检测：双模型 + TTA + 后处理推断
@@ -333,6 +408,12 @@ class EnhancedMultiHazardDetector:
         # ========== 3. 后处理推断：person无防护装备 → 隐患 ==========
         inferred = self._infer_missing_ppe(all_detections)
         all_detections.extend(inferred)
+
+        # 3.1 临边防护分类器（M4）：整图判“无防护”，补一条实例
+        edge_hazard = self._infer_edge_protection(img_path)
+        if edge_hazard is not None:
+            inferred.append(edge_hazard)
+            all_detections.append(edge_hazard)
 
         # ========== 4. 去重：相同隐患类型合并，保留最高置信度 ==========
         deduped = self._deduplicate(all_detections)
