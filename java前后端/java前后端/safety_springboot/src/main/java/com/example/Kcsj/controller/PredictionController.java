@@ -144,46 +144,72 @@ public class PredictionController {
                 imgRecords.setSuggestion(String.valueOf(responses.get("suggestion")));
                 imgRecordsMapper.insert(imgRecords);
 
-                String hazardLevel = HazardLevel.normalize(responses.getString("hazard_level"));
-                if (hazardLevel != null && !hazardLevel.isEmpty()) {
+                JSONArray hazardArray = responses.getJSONArray("hazards");
+                if (hazardArray == null || hazardArray.isEmpty()) {
                     JSONArray labels = responses.getJSONArray("label");
-                    String hiddenType = labels != null && !labels.isEmpty() ? labels.getString(0) : "未知隐患";
-
+                    JSONObject fallback = new JSONObject();
+                    fallback.put("hazard_type", labels != null && !labels.isEmpty() ? labels.getString(0) : "未知隐患");
+                    fallback.put("level", responses.getString("hazard_level"));
+                    fallback.put("suggestion", responses.getString("suggestion"));
                     JSONObject rectifyTask = responses.getJSONObject("rectify_task");
-                    String responsible = rectifyTask != null ? rectifyTask.getString("duty_person") : "";
+                    fallback.put("duty_person", rectifyTask != null ? rectifyTask.getString("duty_person") : "");
+                    hazardArray = new JSONArray();
+                    hazardArray.add(fallback);
+                }
+
+                // 每条隐患实例单独建工单；不再只取第一条
+                for (int i = 0; i < hazardArray.size(); i++) {
+                    JSONObject hazard = hazardArray.getJSONObject(i);
+                    String hazardLevel = HazardLevel.normalize(hazard.getString("level"));
+                    if (hazardLevel == null || hazardLevel.isEmpty()) {
+                        continue;
+                    }
+                    String hiddenType = hazard.getString("hazard_type");
+                    if (hiddenType == null || hiddenType.isEmpty()) {
+                        hiddenType = "未知隐患";
+                    }
+                    String responsible = hazard.getString("duty_person");
                     if (responsible == null || responsible.isEmpty()) {
                         responsible = HazardLevel.defaultResponsible(hazardLevel);
                     }
-                    // 保留现有 6 个角色，不再把“现场施工人员”并成“施工班组长”
-                    responsible = responsible.replace("施工班组", "施工班组长");
+                    // 保留现有 6 个角色；已含“施工班组长”时不要再替换，避免“施工班组长长”
+                    if (!responsible.contains("施工班组长")) {
+                        responsible = responsible.replace("施工班组", "施工班组长");
+                    }
 
                     String responseTimeout = HazardLevel.responseTimeout(hazardLevel);
                     String rectifyTimeout = HazardLevel.rectifyTimeout(hazardLevel);
                     String now = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+                    String kbId = hazard.getString("kb_id");
+                    String suggestion = hazard.getString("suggestion");
+                    if (suggestion == null || suggestion.isEmpty()) {
+                        suggestion = String.valueOf(responses.get("suggestion"));
+                    }
 
                     WorkOrder workOrder = new WorkOrder();
-                    workOrder.setOrderNo("WO" + new SimpleDateFormat("yyyyMMddHHmmss").format(new Date()));
+                    workOrder.setOrderNo("WO" + new SimpleDateFormat("yyyyMMddHHmmss").format(new Date()) + "-" + (i + 1));
                     workOrder.setHiddenType(hiddenType);
                     workOrder.setLevel(hazardLevel);
+                    workOrder.setKbId(kbId);
+                    workOrder.setLevelSource(kbId != null && !kbId.isEmpty() ? "知识库" : "规则兜底");
                     workOrder.setLocation("施工现场");
-                    workOrder.setDescription("检测到安全隐患：" + hiddenType);
+                    workOrder.setDescription("检测到安全隐患：" + hiddenType + (kbId != null && !kbId.isEmpty() ? "（知识库 " + kbId + "）" : ""));
                     workOrder.setResponsible(responsible);
                     workOrder.setDeadline(rectifyTimeout);
                     workOrder.setResponseDeadline(addMinutes(now, HazardLevel.responseMinutes(hazardLevel)));
                     workOrder.setRectifyDeadline(addMinutes(now, HazardLevel.rectifyMinutes(hazardLevel)));
                     workOrder.setStatus("pending");
-                    workOrder.setSuggestion(String.valueOf(responses.get("suggestion")));
+                    workOrder.setSuggestion(suggestion);
                     workOrder.setCreateTime(now);
                     workOrder.setUpdateTime(now);
                     workOrder.setRecordId(imgRecords.getId());
                     workOrderMapper.insert(workOrder);
 
                     // 检测预警：始终按隐患等级向对应角色推送（不受responsible影响）
-                    // responsible仅用于工单责任人字段，不用于推送
                     List<String> pushRoles = HazardLevel.pushRoles(hazardLevel);
                     System.out.println("检测预警推送: hazardLevel=" + hazardLevel
                             + ", 响应=" + responseTimeout + ", 整改=" + rectifyTimeout
-                            + ", hiddenType=" + hiddenType + ", pushRoles=" + pushRoles);
+                            + ", hiddenType=" + hiddenType + ", kbId=" + kbId + ", pushRoles=" + pushRoles);
 
                     LambdaQueryWrapper<User> userWrapper = Wrappers.<User>lambdaQuery();
                     userWrapper.in(User::getRole, pushRoles);

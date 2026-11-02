@@ -73,6 +73,30 @@
 							</el-card>
 						</div>
 						<el-collapse v-model="state.activeCollapse" class="detail-collapse">
+						<el-collapse-item name="hazards" v-if="state.hazards.length">
+							<template #title>
+								<span class="collapse-title">隐患实例清单（{{ state.hazards.length }} 条，含知识库依据）</span>
+							</template>
+							<el-table :data="state.hazards" style="width: 100%" max-height="320" empty-text="暂无隐患实例">
+								<el-table-column prop="instance_id" label="编号" width="65" align="center" />
+								<el-table-column prop="hazard_type" label="隐患类型" min-width="130" />
+								<el-table-column label="等级" width="95" align="center">
+									<template #default="scope">
+										<el-tag :type="scope.row.level && scope.row.level.includes('Ⅰ') ? 'danger' : scope.row.level && scope.row.level.includes('Ⅱ') ? 'warning' : 'info'" size="small">
+											{{ scope.row.level || '-' }}
+										</el-tag>
+									</template>
+								</el-table-column>
+								<el-table-column prop="confidence" label="置信度" width="75" align="center" />
+								<el-table-column label="知识库" width="150">
+									<template #default="scope">
+										<span v-if="scope.row.kb_id">{{ scope.row.kb_id }} · {{ scope.row.standard || '条款待补' }}</span>
+										<span v-else style="color: #909399;">规则兜底</span>
+									</template>
+								</el-table-column>
+								<el-table-column prop="rectify_measure" label="整改措施" min-width="200" show-overflow-tooltip />
+							</el-table>
+						</el-collapse-item>
 						<el-collapse-item name="detail">
 							<template #title>
 								<span class="collapse-title">检测详情（所有检测结果，共 {{ state.allDetections.length }} 项）</span>
@@ -154,7 +178,8 @@ const state = reactive({
 	img: '',
 	data: [] as any,
 	allDetections: [] as any,
-	activeCollapse: ['detail'] as string[],
+	hazards: [] as any[],
+	activeCollapse: ['hazards', 'detail'] as string[],
 	predictionResult: {
 		label: [] as string[],
 		confidence: [] as string[],
@@ -211,6 +236,8 @@ const transformData = (rawData: any): any => {
 
 const upData = () => {
 	state.loading = true;
+	state.hazards = [];
+	state.allDetections = [];
 	state.form.weight = weight.value;
 	state.form.conf = parseFloat(conf.value.toString()) / 100,
 		state.form.username = userInfos.value.userName;
@@ -237,6 +264,7 @@ const upData = () => {
 				state.predictionResult.confidence = confidences;
 				state.predictionResult.allTime = res.data.allTime;
 				state.predictionResult.suggestion = marked(res.data.suggestion || '');
+				state.hazards = res.data.hazards || [];
 				state.allDetections = res.data.all_detections || [];
 				if (res.data.outImg) {
 					imageUrl.value = resolveMediaUrl(res.data.outImg);

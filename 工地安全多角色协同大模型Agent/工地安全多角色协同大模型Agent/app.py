@@ -363,14 +363,24 @@ class SafetyDetectionApp:
                     "response_timeout": task.get('response_timeout', ''),
                     "rectify_timeout": task.get('rectify_timeout', ''),
                     "suggestion": suggestion,
-                    "clause_ids": [],
+                    "kb_id": task.get('kb_id', ''),
+                    "kb_name": task.get('kb_name', ''),
+                    "standard": task.get('standard', ''),
+                    "clause_no": task.get('clause_no', ''),
+                    "clause_ids": task.get('clause_ids', []),
+                    "rectify_measure": task.get('rectify_measure', ''),
                 })
                 print(f"🔍 Agent流水线完成: {h['hazard_type']}, hazard_level={final_state.get('hazard_level', 'N/A')}")
 
-            # 顶层字段保留第一条，兼容旧接口；新增 hazards[] 给多目标消费
-            final_state = all_final_states[0] if all_final_states else {}
+            # 顶层字段取最高等级的那条，兼容旧接口；新增 hazards[] 给多目标消费
+            level_order = {"Ⅰ级重大": 4, "Ⅱ级较大": 3, "Ⅲ级一般": 2, "Ⅳ级轻微": 1}
+            final_state = max(
+                all_final_states,
+                key=lambda s: level_order.get(s.get("hazard_level", ""), 0),
+            ) if all_final_states else {}
             self.data["hazards"] = hazard_records
             self.data["hazard_count"] = len(hazard_records)
+            self.data["kb_ids"] = [h.get("kb_id") for h in hazard_records if h.get("kb_id")]
 
             # ========== 绘制标注图（含推断的隐患框） ==========
             import cv2

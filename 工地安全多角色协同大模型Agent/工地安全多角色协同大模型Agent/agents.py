@@ -4,6 +4,7 @@
 
 from state import HazardState
 from rag_core import query_safety_rule
+from hazard_kb import enrich, kb_context, kb_reference
 
 
 # 四级隐患：等级、响应时限、整改时限、责任人（与 业务规则改造记录.md 一致）
@@ -50,8 +51,12 @@ def normalize_level(level: str) -> str:
 
 
 def classify_hazard_level(hazard_type: str):
-    """按业务规则做确定性四级映射，避免让大模型自由编等级。"""
+    """优先按结构化知识库定级；KB 未收录才回退关键词规则。"""
     text = (hazard_type or "").strip()
+    item = enrich(text)
+    if item:
+        return item["level"], f"{item['kb_id']}《{item['kb_name']}》按知识库定为{item['level']}；依据：{kb_reference(item)}"
+
     critical = ("临边", "洞口", "基坑", "高支模", "起重", "倾覆", "坍塌", "堆载", "超高", "高处抛物", "动火")
     major = ("安全带", "连墙件", "安全网", "电缆", "线缆", "私拉", "拖地", "灭火器", "火灾", "触电", "机械")
     minor = ("标识", "保洁", "文明", "垃圾")
@@ -84,8 +89,13 @@ def inspect_agent(state: HazardState) -> HazardState:
         state.current_agent = "inspect"
         return state
 
-    # RAG查询对应安全规范
-    rule = query_safety_rule(f"{hazard['hazard_type']} 建筑安全规范 JGJ GB 风险要求")
+    # 先查结构化知识库；命中就用固定条款/措施，未命中才走 RAG
+    item = enrich(hazard["hazard_type"])
+    if item:
+        hazard.update(item)
+        rule = kb_context(item)
+    else:
+        rule = query_safety_rule(f"{hazard['hazard_type']} 建筑安全规范 JGJ GB 风险要求")
     state.rag_standard = rule
     state.current_agent = "inspect"
     print(f"  ✅ 巡检完成：{hazard['hazard_type']} (置信度 {hazard['confidence']:.2f})")
@@ -102,12 +112,15 @@ def level_agent(state: HazardState) -> HazardState:
 
     hazard_type = state.hazard_raw["hazard_type"]
     level, reason = classify_hazard_level(hazard_type)
+    item = enrich(hazard_type)
     meta = LEVEL_META[level]
+    response_timeout = (item.get("response_timeout") or meta["response_timeout"]) if item else meta["response_timeout"]
+    rectify_timeout = (item.get("rectify_timeout") or meta["rectify_timeout"]) if item else meta["rectify_timeout"]
 
     state.hazard_level = level
     state.level_code = meta["code"]
-    state.response_timeout = meta["response_timeout"]
-    state.rectify_timeout = meta["rectify_timeout"]
+    state.response_timeout = response_timeout
+    state.rectify_timeout = rectify_timeout
     rule_basis = (state.rag_standard or "").strip()
     state.level_reason = reason + (f"；规范依据：{rule_basis[:200]}" if rule_basis else "")
     state.current_agent = "level"
@@ -126,22 +139,36 @@ def dispatch_agent(state: HazardState) -> HazardState:
     hazard = state.hazard_raw
     level = normalize_level(state.hazard_level)
     meta = LEVEL_META[level]
+    item = enrich(hazard["hazard_type"])
+    duty_person = (item.get("duty_person") or meta["duty_person"]) if item else meta["duty_person"]
+    response_timeout = (item.get("response_timeout") or meta["response_timeout"]) if item else meta["response_timeout"]
+    rectify_timeout = (item.get("rectify_timeout") or meta["rectify_timeout"]) if item else meta["rectify_timeout"]
 
     task = {
         "hazard_type": hazard["hazard_type"],
         "level": level,
         "level_code": meta["code"],
-        "duty_person": meta["duty_person"],
-        "timeout": meta["rectify_timeout"],
-        "response_timeout": meta["response_timeout"],
-        "rectify_timeout": meta["rectify_timeout"],
+        "duty_person": duty_person,
+        "timeout": rectify_timeout,
+        "response_timeout": response_timeout,
+        "rectify_timeout": rectify_timeout,
         "rule_basis": (state.rag_standard or "请依据《建筑施工安全检查标准》JGJ 59-2011 现场核查。")[:200],
         "status": "待整改"
     }
+    if item:
+        task.update({
+            "kb_id": item["kb_id"],
+            "kb_name": item["kb_name"],
+            "standard": item["standard"],
+            "clause_no": item["clause_no"],
+            "clause_ids": item["clause_ids"],
+            "rectify_measure": item["rectify_measure"],
+            "control_requirement": item["control_requirement"],
+        })
     state.hazard_level = level
     state.level_code = meta["code"]
-    state.response_timeout = meta["response_timeout"]
-    state.rectify_timeout = meta["rectify_timeout"]
+    state.response_timeout = response_timeout
+    state.rectify_timeout = rectify_timeout
     state.rectify_task = task
     state.current_agent = "dispatch"
     print(f"  ✅ 派单完成：{task['hazard_type']} → {task['duty_person']}（响应{meta['response_timeout']} / 整改{meta['rectify_timeout']}）")
@@ -158,8 +185,10 @@ def chat_agent(state: HazardState) -> HazardState:
 
     task = state.rectify_task
 
-    # RAG查询整改建议
-    rag_suggestion = query_safety_rule(f"{task['hazard_type']} 整改措施 处理方法 预防措施 建筑施工安全")
+    # KB 命中时用固定整改措施；未命中才 RAG
+    rag_suggestion = task.get("rectify_measure") or query_safety_rule(
+        f"{task['hazard_type']} 整改措施 处理方法 预防措施 建筑施工安全"
+    )
 
     msg = f"""
     【安全隐患整改通知】
@@ -202,6 +231,11 @@ def ledger_agent(state: HazardState) -> HazardState:
         "response_timeout": state.response_timeout,
         "rectify_timeout": state.rectify_timeout,
         "task_info": state.rectify_task,
+        "kb_info": {
+            k: state.rectify_task.get(k)
+            for k in ("kb_id", "kb_name", "standard", "clause_no", "rectify_measure", "control_requirement")
+            if state.rectify_task and state.rectify_task.get(k)
+        },
         "chat_logs": state.chat_records,
         "finish_time": state.hazard_raw["time"]
     }

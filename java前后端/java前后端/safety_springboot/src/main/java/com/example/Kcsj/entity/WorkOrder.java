@@ -31,6 +31,10 @@ public class WorkOrder {
     private String adjustReason;
     private String adjustUser;
     private String adjustTime;
+    // 知识库匹配留痕
+    private String kbId;
+    private String levelSource;
+    private String originalLevel;
     private String status;
     private String suggestion;
     private String createTime;
