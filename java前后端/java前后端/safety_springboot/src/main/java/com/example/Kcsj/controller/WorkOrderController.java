@@ -3,8 +3,10 @@ package com.example.Kcsj.controller;
 import com.alibaba.fastjson.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.example.Kcsj.common.AuthTokenService;
 import com.example.Kcsj.common.HazardLevel;
 import com.example.Kcsj.common.Result;
+import com.example.Kcsj.common.WorkOrderAssigneeService;
 import com.example.Kcsj.entity.Message;
 import com.example.Kcsj.entity.User;
 import com.example.Kcsj.entity.WorkOrder;
@@ -18,6 +20,8 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -38,8 +42,61 @@ public class WorkOrderController {
     MessageMapper messageMapper;
     @Resource
     UserMapper userMapper;
+    @Resource
+    AuthTokenService authTokenService;
+    @Resource
+    WorkOrderAssigneeService assigneeService;
 
     private final RestTemplate restTemplate = new RestTemplate();
+
+    private AuthTokenService.AuthUser currentUser() {
+        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        return attrs == null ? null : authTokenService.resolve(attrs.getRequest());
+    }
+
+    private static boolean isPrivileged(String role) {
+        return "管理员".equals(role) || "项目经理".equals(role) || "专职安全员".equals(role);
+    }
+
+    private static String assigneeRole(WorkOrder order) {
+        if (order.getAssigneeRole() != null && !order.getAssigneeRole().isEmpty()) {
+            return order.getAssigneeRole();
+        }
+        return WorkOrderAssigneeService.roleForLevel(order.getLevel());
+    }
+
+    private boolean canView(AuthTokenService.AuthUser user, WorkOrder order) {
+        if (user == null) return false;
+        if (isPrivileged(user.getRole())) return true;
+        String role = user.getRole();
+        String ownerRole = assigneeRole(order);
+        if ("巡检员".equals(role)) {
+            // 巡检员查看安全员/班组长负责的Ⅱ、Ⅲ级，作为巡查监督视角
+            String level = HazardLevel.normalize(order.getLevel());
+            return level.startsWith("Ⅱ") || level.startsWith("Ⅲ");
+        }
+        if ("施工班组长".equals(role) || "现场施工人员".equals(role)) {
+            return role.equals(ownerRole);
+        }
+        return false;
+    }
+
+    private boolean canOperate(AuthTokenService.AuthUser user, WorkOrder order) {
+        if (user == null) return false;
+        if (isPrivileged(user.getRole())) return true;
+        // 班组长/工人只能操作自己角色对应的工单；巡检员只读监督
+        return "施工班组长".equals(user.getRole()) || "现场施工人员".equals(user.getRole())
+                ? user.getRole().equals(assigneeRole(order))
+                : false;
+    }
+
+    private Result<?> loginRequired() {
+        return Result.error("401", "请先登录后再操作");
+    }
+
+    private Result<?> forbidden() {
+        return Result.error("403", "当前账号无权操作该工单");
+    }
 
     @GetMapping
     public Result<?> findPage(
@@ -50,7 +107,10 @@ public class WorkOrderController {
             @RequestParam(name = "status", defaultValue = "") String status,
             @RequestParam(name = "level", defaultValue = "") String level) {
         try {
+            AuthTokenService.AuthUser user = currentUser();
+            if (user == null) return loginRequired();
             List<WorkOrder> records = workOrderMapper.selectList(null);
+            records = records.stream().filter(r -> canView(user, r)).collect(java.util.stream.Collectors.toList());
             records.sort((a, b) -> {
                 if (a.getCreateTime() == null) return 1;
                 if (b.getCreateTime() == null) return -1;
@@ -120,7 +180,11 @@ public class WorkOrderController {
     @GetMapping("/{id}")
     public Result<?> findById(@PathVariable Integer id) {
         try {
+            AuthTokenService.AuthUser user = currentUser();
+            if (user == null) return loginRequired();
             WorkOrder order = workOrderMapper.selectById(id);
+            if (order == null) return Result.error("-1", "工单不存在");
+            if (!canView(user, order)) return forbidden();
             return Result.success(order);
         } catch (Exception e) {
             return Result.error("-1", "Error: " + e.getMessage());
@@ -130,6 +194,9 @@ public class WorkOrderController {
     @PostMapping
     public Result<?> create(@RequestBody WorkOrder order) {
         try {
+            AuthTokenService.AuthUser user = currentUser();
+            if (user == null) return loginRequired();
+            if (!isPrivileged(user.getRole())) return forbidden();
             if (order.getOrderNo() == null || order.getOrderNo().isEmpty()) {
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
                 order.setOrderNo("WO" + sdf.format(new Date()));
@@ -154,6 +221,7 @@ public class WorkOrderController {
             if (order.getRemindCount() == null) {
                 order.setRemindCount(0);
             }
+            assigneeService.apply(order);
             workOrderMapper.insert(order);
             notifyOrder(order, "warning", "新工单待处理",
                     "工单[" + order.getOrderNo() + "]（" + order.getHiddenType() + "）已创建，请及时处理。");
@@ -166,10 +234,13 @@ public class WorkOrderController {
     @PutMapping("/{id}")
     public Result<?> update(@PathVariable Integer id, @RequestBody WorkOrder order) {
         try {
+            AuthTokenService.AuthUser user = currentUser();
+            if (user == null) return loginRequired();
             WorkOrder existing = workOrderMapper.selectById(id);
             if (existing == null) {
                 return Result.error("-1", "工单不存在");
             }
+            if (!isPrivileged(user.getRole()) || !canView(user, existing)) return forbidden();
             if (order.getHiddenType() != null) existing.setHiddenType(order.getHiddenType());
             if (order.getLevel() != null) {
                 String level = HazardLevel.normalize(order.getLevel());
@@ -214,10 +285,13 @@ public class WorkOrderController {
     @PutMapping("/{id}/process")
     public Result<?> process(@PathVariable Integer id) {
         try {
+            AuthTokenService.AuthUser user = currentUser();
+            if (user == null) return loginRequired();
             WorkOrder existing = workOrderMapper.selectById(id);
             if (existing == null) {
                 return Result.error("-1", "工单不存在");
             }
+            if (!canOperate(user, existing)) return forbidden();
             existing.setStatus("processing");
             String updateTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
             existing.setUpdateTime(updateTime);
@@ -233,10 +307,13 @@ public class WorkOrderController {
     @PutMapping("/{id}/complete")
     public Result<?> complete(@PathVariable Integer id) {
         try {
+            AuthTokenService.AuthUser user = currentUser();
+            if (user == null) return loginRequired();
             WorkOrder existing = workOrderMapper.selectById(id);
             if (existing == null) {
                 return Result.error("-1", "工单不存在");
             }
+            if (!canOperate(user, existing)) return forbidden();
 
             String deadline = existing.getDeadline();
             String createTime = existing.getCreateTime();
@@ -289,10 +366,13 @@ public class WorkOrderController {
     @PutMapping("/{id}/close")
     public Result<?> close(@PathVariable Integer id) {
         try {
+            AuthTokenService.AuthUser user = currentUser();
+            if (user == null) return loginRequired();
             WorkOrder existing = workOrderMapper.selectById(id);
             if (existing == null) {
                 return Result.error("-1", "工单不存在");
             }
+            if (!canOperate(user, existing)) return forbidden();
             existing.setStatus("closed");
             existing.setUpdateTime(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
             workOrderMapper.updateById(existing);
@@ -368,6 +448,9 @@ public class WorkOrderController {
     @DeleteMapping("/{id}")
     public Result<?> delete(@PathVariable Integer id) {
         try {
+            AuthTokenService.AuthUser user = currentUser();
+            if (user == null) return loginRequired();
+            if (!"管理员".equals(user.getRole())) return forbidden();
             workOrderMapper.deleteById(id);
             return Result.success("删除成功");
         } catch (Exception e) {
@@ -384,8 +467,14 @@ public class WorkOrderController {
             @RequestParam(name = "level", defaultValue = "") String level,
             HttpServletResponse response) {
         try {
+            AuthTokenService.AuthUser user = currentUser();
+            if (user == null) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
+            }
             // 查询数据（与列表查询逻辑一致）
             List<WorkOrder> records = workOrderMapper.selectList(null);
+            records = records.stream().filter(r -> canView(user, r)).collect(java.util.stream.Collectors.toList());
             records.sort((a, b) -> {
                 if (a.getCreateTime() == null) return 1;
                 if (b.getCreateTime() == null) return -1;
@@ -515,6 +604,9 @@ public class WorkOrderController {
     @PutMapping("/{id}/audit")
     public Result<?> audit(@PathVariable Integer id, @RequestBody Map<String, String> body) {
         try {
+            AuthTokenService.AuthUser user = currentUser();
+            if (user == null) return loginRequired();
+            if (!isPrivileged(user.getRole())) return forbidden();
             WorkOrder existing = workOrderMapper.selectById(id);
             if (existing == null) {
                 return Result.error("-1", "工单不存在");
@@ -539,6 +631,9 @@ public class WorkOrderController {
     @PutMapping("/{id}/remind")
     public Result<?> remind(@PathVariable Integer id, @RequestBody Map<String, String> body) {
         try {
+            AuthTokenService.AuthUser user = currentUser();
+            if (user == null) return loginRequired();
+            if (!isPrivileged(user.getRole())) return forbidden();
             WorkOrder existing = workOrderMapper.selectById(id);
             if (existing == null) {
                 return Result.error("-1", "工单不存在");
@@ -596,10 +691,10 @@ public class WorkOrderController {
             }
 
             List<String> userIds = new ArrayList<>();
-            for (User user : users) {
-                userIds.add(user.getUsername());
+            for (User target : users) {
+                userIds.add(target.getUsername());
                 Message message = new Message();
-                message.setUserId(user.getUsername());
+                message.setUserId(target.getUsername());
                 message.setType("warning");
                 message.setTitle("工单督办提醒");
                 message.setContent("工单[" + existing.getOrderNo() + "]已督办" + (count + 1) + "次，请尽快处理！" +
@@ -636,6 +731,9 @@ public class WorkOrderController {
                              @RequestParam(value = "rectifyImg", required = false) String rectifyImgUrl,
                              HttpServletRequest request) {
         try {
+            AuthTokenService.AuthUser user = currentUser();
+            if (user == null) return loginRequired();
+            if (!isPrivileged(user.getRole())) return forbidden();
             WorkOrder existing = workOrderMapper.selectById(id);
             if (existing == null) {
                 return Result.error("-1", "工单不存在");

@@ -1,6 +1,7 @@
 package com.example.Kcsj.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -28,6 +29,10 @@ public class User {
     private String avatar;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "GMT+8")
     private Date time;
+
+    // 登录成功后临时下发，不落库
+    @TableField(exist = false)
+    private String token;
 
     public Integer getId() {
         return id;

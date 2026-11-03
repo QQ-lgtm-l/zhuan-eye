@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.example.Kcsj.common.AuthTokenService;
 import com.example.Kcsj.common.Result;
 import com.example.Kcsj.entity.User;
 import com.example.Kcsj.mapper.UserMapper;
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 @RestController
@@ -24,6 +27,9 @@ public class UserController {
 
     @Resource
     EmailCodeService emailCodeService;
+
+    @Resource
+    AuthTokenService authTokenService;
 
     /** 是否强制注册前完成邮箱验证（默认关闭，避免影响小程序等未接验证码的客户端） */
     @Value("${app.mail.require-code:false}")
@@ -82,7 +88,9 @@ public class UserController {
                 return Result.error("-1", "密码错误！");
             }
             // 登录只认手机号/账号，角色从数据库带出，不再让用户选择
+            String token = authTokenService.issue(user);
             user.setPassword(null);
+            user.setToken(token);
             return Result.success(user);
         } catch (Exception e) {
             return Result.error("-1", "登录失败：" + e.getMessage());

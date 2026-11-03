@@ -1,0 +1,24 @@
+const WebSocket=require('ws'); const http=require('http');
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const get=p=>new Promise((res,rej)=>http.get({host:'127.0.0.1',port:9222,path:p},r=>{let d='';r.on('data',c=>d+=c);r.on('end',()=>res(JSON.parse(d)))}).on('error',rej));
+(async()=>{
+ const ts=await get('/json/list'); const t=ts.find(x=>x.type==='page'); const ws=new WebSocket(t.webSocketDebuggerUrl,{perMessageDeflate:false});
+ let id=0; const pending=new Map(); ws.on('message',m=>{const j=JSON.parse(m);if(j.id&&pending.has(j.id)){pending.get(j.id)(j.result);pending.delete(j.id)}});
+ await new Promise(r=>ws.on('open',r));
+ const send=(method,params={})=>new Promise(r=>{const i=++id;pending.set(i,r);ws.send(JSON.stringify({id:i,method,params}))});
+ const ev=async e=>(await send('Runtime.evaluate',{expression:e,returnByValue:true,awaitPromise:true})).result?.value;
+ await send('Page.enable'); await send('Runtime.enable');
+ await send('Network.clearBrowserCookies');
+ await send('Page.navigate',{url:'http://localhost:8888/?t='+Date.now()+'#/login'}); await sleep(2500);
+ const setVal=async(ph,txt)=>ev(`(()=>{const el=[...document.querySelectorAll('input')].find(e=>e.placeholder==='${ph}');if(!el)return false;const s=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;s.call(el,'${txt}');el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);
+ console.log('fill',await setVal('请输入手机号','15893646659'),await setVal('请输入密码','123456'));
+ await ev(`(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.textContent.includes('登 录'));if(b)b.click();return !!b})()`);
+ await sleep(2500);
+ console.log('cookies',await ev('document.cookie'));
+ console.log('session',await ev("JSON.stringify({...sessionStorage,...localStorage})"));
+ console.log('token',await ev("document.cookie.split('; ').find(x=>x.startsWith('token='))"));
+ await send('Page.navigate',{url:'http://localhost:8888/?t='+Date.now()+'#/workOrder'}); await sleep(2500);
+ console.log('orders',await ev("document.querySelector('.el-pagination__total')?.textContent"));
+ console.log('body',await ev("document.body.innerText.slice(0,300)"));
+ ws.close();
+})().catch(e=>{console.error(e);process.exit(1)});

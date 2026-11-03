@@ -41,6 +41,11 @@ public class WorkOrder {
     private String updateTime;
     private Integer recordId;
 
+    // 主责账号（列表过滤/操作鉴权用；responsible 仍保留展示用的角色文本）
+    private Integer assigneeId;
+    private String assigneeName;
+    private String assigneeRole;
+
     // AI二次复核相关字段
     private String rectifyImg;       // 整改图片路径
     private String recheckStatus;    // 复核状态: pending/passed/failed

@@ -35,34 +35,28 @@
 			</div>
 			<el-table :data="state.tableData.data" size="small" class="order-table" style="width: 100%">
 				<el-table-column prop="num" label="序号" width="60" align="center" />
-				<el-table-column prop="orderNo" label="工单编号" width="160" show-overflow-tooltip align="center"></el-table-column>
+				<el-table-column prop="orderNo" label="工单编号" width="145" show-overflow-tooltip align="center"></el-table-column>
 				<el-table-column prop="hiddenType" label="隐患类型" width="120" show-overflow-tooltip align="center"></el-table-column>
 				<el-table-column prop="level" label="隐患等级" width="100" align="center">
 					<template #default="scope">
 						<el-tag :type="getLevelType(scope.row.level)">{{ normalizeLevel(scope.row.level) }}</el-tag>
 					</template>
 				</el-table-column>
-				<el-table-column prop="location" label="隐患位置" width="110" show-overflow-tooltip align="center"></el-table-column>
-				<el-table-column prop="description" label="隐患描述" width="140" show-overflow-tooltip align="center"></el-table-column>
-				<el-table-column prop="responsible" label="责任人" width="100" show-overflow-tooltip align="center"></el-table-column>
+				<el-table-column prop="location" label="隐患位置" width="90" show-overflow-tooltip align="center"></el-table-column>
+				<el-table-column prop="description" label="隐患描述" width="120" show-overflow-tooltip align="center"></el-table-column>
+				<el-table-column label="主责" width="110" align="center">
+					<template #default="scope">
+						<div v-if="scope.row.assigneeName">{{ scope.row.assigneeName }}</div>
+						<div v-else style="color:#909399;">未分配</div>
+						<div v-if="scope.row.assigneeRole" style="font-size:11px;color:#909399;">{{ scope.row.assigneeRole }}</div>
+					</template>
+				</el-table-column>
 				<el-table-column prop="status" label="状态" width="100" align="center">
 					<template #default="scope">
 						<el-tag :type="getStatusType(scope.row.status)">{{ getStatusText(scope.row.status) }}</el-tag>
 					</template>
 				</el-table-column>
-				<el-table-column prop="recheckStatus" label="AI复核" width="100" align="center">
-					<template #default="scope">
-						<el-tag :type="getRecheckType(scope.row.recheckStatus)" v-if="scope.row.recheckStatus">{{ getRecheckText(scope.row.recheckStatus) }}</el-tag>
-						<span v-else>-</span>
-					</template>
-				</el-table-column>
-				<el-table-column prop="remindCount" label="督办" width="80" align="center">
-					<template #default="scope">
-						<span v-if="scope.row.remindCount > 0" style="color: #F56C6C; font-weight: bold;">{{ scope.row.remindCount }}次</span>
-						<span v-else>-</span>
-					</template>
-				</el-table-column>
-				<el-table-column prop="deadline" label="整改时限" width="185" align="center">
+				<el-table-column prop="deadline" label="整改时限" width="160" align="center">
 					<template #default="scope">
 						<div class="deadline-cell" :class="{ 'deadline-overdue': isOverdue(scope.row) }">
 							<div class="deadline-raw">
@@ -73,14 +67,13 @@
 						</div>
 					</template>
 				</el-table-column>
-				<el-table-column prop="createTime" label="创建时间" width="160" align="center" />
-				<el-table-column label="操作" width="160" align="center" fixed="right">
+				<el-table-column label="操作" width="140" align="center" fixed="right">
 					<template #default="scope">
 						<el-button size="small" text type="primary" @click="viewDetail(scope.row)">查看详情</el-button>
 						<el-button size="small" text type="success" @click="handleOrder(scope.row)"
-							v-if="scope.row.status === 'pending'">处理</el-button>
+							v-if="scope.row.status === 'pending' && canProcessOrder(scope.row)">处理</el-button>
 						<el-button size="small" text type="warning" @click="closeOrder(scope.row)"
-							v-if="scope.row.status === 'completed' || scope.row.status === 'timeout'">关闭</el-button>
+							v-if="(scope.row.status === 'completed' || scope.row.status === 'timeout') && canProcessOrder(scope.row)">关闭</el-button>
 					</template>
 				</el-table-column>
 			</el-table>
@@ -106,8 +99,14 @@
 				<el-form-item label="隐患描述">
 					{{ state.orderDetail.description }}
 				</el-form-item>
-				<el-form-item label="责任人">
+				<el-form-item label="责任角色">
 					{{ state.orderDetail.responsible }}
+				</el-form-item>
+				<el-form-item label="主责账号">
+					<span v-if="state.orderDetail.assigneeName">
+						{{ state.orderDetail.assigneeName }}（{{ state.orderDetail.assigneeRole }}）
+					</span>
+					<span v-else>未分配</span>
 				</el-form-item>
 				<el-form-item label="整改建议">
 					<el-input
@@ -208,11 +207,11 @@
 			<div slot="footer">
 				<el-button @click="state.dialogVisible = false">关闭</el-button>
 				<el-button type="primary" @click="handleOrder(state.orderDetail)"
-					v-if="state.orderDetail.status === 'pending'">确认处理</el-button>
+					v-if="state.orderDetail.status === 'pending' && canProcessOrder(state.orderDetail)">确认处理</el-button>
 				<el-button type="success" @click="completeOrder(state.orderDetail)"
-					v-if="state.orderDetail.status === 'processing'">处理完成</el-button>
+					v-if="state.orderDetail.status === 'processing' && canProcessOrder(state.orderDetail)">处理完成</el-button>
 				<el-button type="warning" @click="closeOrder(state.orderDetail)"
-					v-if="state.orderDetail.status === 'completed' || state.orderDetail.status === 'timeout'">关闭工单</el-button>
+					v-if="(state.orderDetail.status === 'completed' || state.orderDetail.status === 'timeout') && canProcessOrder(state.orderDetail)">关闭工单</el-button>
 			</div>
 		</el-dialog>
 	</div>
@@ -384,6 +383,14 @@ export default {
 		};
 		const onRecheckFileRemove = (_file: any, fileList: any[]) => {
 			state.recheckFileList = fileList;
+		};
+
+		const canProcessOrder = (row: any) => {
+			if (!row) return false;
+			if (['管理员', '项目经理', '专职安全员'].includes(userRole)) return true;
+			if (userRole === '施工班组长') return row.assigneeRole === '施工班组长';
+			if (userRole === '现场施工人员') return row.assigneeRole === '现场施工人员';
+			return false;
 		};
 
 		const handleOrder = (row: any) => {
@@ -608,6 +615,7 @@ export default {
 			getRecheckType,
 			getRecheckText,
 			viewDetail,
+			canProcessOrder,
 			handleOrder,
 			completeOrder,
 			closeOrder,

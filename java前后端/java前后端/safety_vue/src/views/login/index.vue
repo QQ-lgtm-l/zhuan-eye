@@ -11,13 +11,14 @@
 			</div>
 
 			<el-form :model="ruleForm" :rules="registerRules" ref="ruleFormRef" @submit.prevent>
-				<el-form-item prop="username">
+				<el-form-item prop="phone">
 					<el-input
-						v-model="ruleForm.username"
-						placeholder="请输入用户名"
-						prefix-icon="User"
+						v-model="ruleForm.phone"
+						placeholder="请输入手机号"
+						prefix-icon="Phone"
 						class="custom-input"
 						clearable
+						maxlength="11"
 						@keyup.enter="submitForm(ruleFormRef)"
 					/>
 				</el-form-item>
@@ -48,15 +49,15 @@
 			</div>
 		</div>
 
-		<!-- 忘记密码：邮箱验证码重置 -->
+		<!-- 忘记密码：手机验证码重置 -->
 		<el-dialog v-model="forgotVisible" title="找回密码" width="460px" :close-on-click-modal="false" append-to-body class="forgot-dialog">
 			<el-form ref="forgotRef" :model="forgotForm" :rules="forgotRules" label-width="88px">
-				<el-form-item label="邮箱" prop="email">
-					<el-input v-model="forgotForm.email" placeholder="请输入注册邮箱" prefix-icon="Message" clearable @input="forgotDemoTip = ''" />
+				<el-form-item label="手机号" prop="phone">
+					<el-input v-model="forgotForm.phone" placeholder="请输入注册手机号" prefix-icon="Phone" maxlength="11" clearable autocomplete="tel" @input="forgotDemoTip = ''" />
 				</el-form-item>
 				<el-form-item label="验证码" prop="code">
 					<div class="code-row">
-						<el-input v-model="forgotForm.code" placeholder="6 位验证码" maxlength="6" clearable />
+						<el-input v-model="forgotForm.code" placeholder="6 位验证码" maxlength="6" clearable autocomplete="one-time-code" />
 						<el-button :disabled="forgotCountdown > 0 || forgotSending" :loading="forgotSending" @click="sendForgotCode">
 							{{ forgotCountdown > 0 ? `${forgotCountdown}s 后重发` : '获取验证码' }}
 						</el-button>
@@ -66,10 +67,10 @@
 					<el-alert :title="forgotDemoTip" type="info" :closable="false" show-icon />
 				</el-form-item>
 				<el-form-item label="新密码" prop="newPassword">
-					<el-input v-model="forgotForm.newPassword" type="password" show-password placeholder="6-30 位，需包含字母和数字" />
+					<el-input v-model="forgotForm.newPassword" type="password" show-password autocomplete="new-password" placeholder="6-30 位，需包含字母和数字" />
 				</el-form-item>
 				<el-form-item label="确认密码" prop="confirm">
-					<el-input v-model="forgotForm.confirm" type="password" show-password placeholder="请再次输入新密码" />
+					<el-input v-model="forgotForm.confirm" type="password" show-password autocomplete="new-password" placeholder="请再次输入新密码" />
 				</el-form-item>
 			</el-form>
 			<template #footer>
@@ -95,7 +96,7 @@ import {Session} from '/@/utils/storage';
 import {formatAxis} from '/@/utils/formatTime';
 import {NextLoading} from '/@/utils/loading';
 import request from '/@/utils/request';
-import {sendEmailCode, resetPasswordByEmail} from '/@/api/emailCode';
+import { sendPhoneCode, resetPasswordByPhone } from '/@/api/quickRegister';
 
 // 定义变量内容
 const { t } = useI18n();
@@ -115,11 +116,11 @@ const forgotDemoTip = ref('');
 const forgotSubmitting = ref(false);
 const forgotCountdown = ref(0);
 let forgotTimer: ReturnType<typeof setInterval> | null = null;
-const forgotForm = reactive({ email: '', code: '', newPassword: '', confirm: '' });
+const forgotForm = reactive({ phone: '', code: '', newPassword: '', confirm: '' });
 const forgotRules = reactive<FormRules>({
-	email: [
-		{ required: true, message: '请输入邮箱', trigger: 'blur' },
-		{ type: 'email', message: '邮箱格式不正确', trigger: 'blur' },
+	phone: [
+		{ required: true, message: '请输入手机号', trigger: 'blur' },
+		{ pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' },
 	],
 	code: [
 		{ required: true, message: '请输入验证码', trigger: 'blur' },
@@ -142,7 +143,7 @@ const forgotRules = reactive<FormRules>({
 });
 
 const openForgot = () => {
-	forgotForm.email = '';
+	forgotForm.phone = ruleForm.phone || '';
 	forgotForm.code = '';
 	forgotForm.newPassword = '';
 	forgotForm.confirm = '';
@@ -164,22 +165,22 @@ const startForgotCountdown = () => {
 };
 
 const sendForgotCode = () => {
-	const email = forgotForm.email.trim();
-	if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-		ElMessage.warning('请先输入正确的邮箱地址');
+	const phone = forgotForm.phone.trim();
+	if (!/^1[3-9]\d{9}$/.test(phone)) {
+		ElMessage.warning('请先输入正确的手机号');
 		return;
 	}
 	forgotSending.value = true;
-	sendEmailCode(email, 'reset')
+	sendPhoneCode(phone)
 		.then((res: any) => {
 			if (res.code == 0) {
-				ElMessage.success(res.data?.message || '验证码已发送');
-				if (res.data?.mock && res.data?.code) {
-					forgotForm.code = res.data.code;
-					forgotDemoTip.value = `演示模式：当前未配置邮箱服务，验证码 ${res.data.code} 已自动填入（生产环境会发送到用户邮箱）`;
+				const code = res.data?.code;
+				if (code) {
+					forgotForm.code = code;
+					forgotDemoTip.value = `演示模式：验证码 ${code} 已自动填入（生产环境会发送到手机）`;
 				} else {
 					forgotDemoTip.value = '';
-					ElMessage.success('验证码已发送到邮箱，请查收');
+					ElMessage.success('验证码已发送，请查收短信');
 				}
 				startForgotCountdown();
 			} else {
@@ -196,12 +197,17 @@ const submitForgot = () => {
 	forgotRef.value?.validate((valid) => {
 		if (!valid) return;
 		forgotSubmitting.value = true;
-		resetPasswordByEmail(forgotForm.email.trim(), forgotForm.code.trim(), forgotForm.newPassword)
+		resetPasswordByPhone({
+			phone: forgotForm.phone.trim(),
+			code: forgotForm.code.trim(),
+			newPassword: forgotForm.newPassword,
+		})
 			.then((res: any) => {
 				if (res.code == 0) {
 					ElMessage.success(res.msg || '密码重置成功，请使用新密码登录');
 					forgotVisible.value = false;
-					ruleForm.username = forgotForm.email;
+					ruleForm.phone = forgotForm.phone.trim();
+					ruleForm.password = '';
 				} else {
 					ElMessage.error(res.msg || '重置失败');
 				}
@@ -218,19 +224,19 @@ onBeforeUnmount(() => {
 });
 
 const ruleForm = reactive({
-	username: '',
+	phone: '',
 	password: '',
 });
 
-// 从注册页带过来的账号，自动填入
-if (route.query.u) {
-	ruleForm.username = String(route.query.u);
+// 从注册页带过来的手机号，自动填入
+if (route.query.p) {
+	ruleForm.phone = String(route.query.p);
 }
 
 const registerRules = reactive<FormRules>({
-	username: [
-		{ required: true, message: '请输入账号', trigger: 'blur' },
-		{ min: 3, max: 20, message: '长度在3-20个字符', trigger: 'blur' },
+	phone: [
+		{ required: true, message: '请输入手机号', trigger: 'blur' },
+		{ pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' },
 	],
 	password: [
 		{ required: true, message: '请输入密码', trigger: 'blur' },
@@ -243,8 +249,6 @@ const currentTime = computed(() => {
 });
 
 const onSignIn = async () => {
-	Session.set('token', Math.random().toString(36).substr(0));
-	Cookies.set('userName', ruleForm.username);
 	if (!themeConfig.value.isRequestRoutes) {
 		const isNoPower = await initFrontEndControlRoutes();
 		signInSuccess(isNoPower);
@@ -293,20 +297,23 @@ const signInSuccess = (isNoPower: boolean | undefined) => {
 
 const submitForm = (formEl: FormInstance | undefined) => {
 	if (!formEl || loading.value) return;
-	ruleForm.username = ruleForm.username.trim();
+	ruleForm.phone = ruleForm.phone.trim();
 	formEl.validate((valid) => {
 		if (!valid) return;
 		loading.value = true;
 		request
-			.post('/api/user/login', ruleForm)
+			.post('/api/user/login', { tel: ruleForm.phone, password: ruleForm.password })
 			.then((res: any) => {
 				if (res.code == 0) {
+					Cookies.set('userName', res.data.username);
+					Cookies.set('displayName', res.data.name || res.data.username);
 					Cookies.set('role', res.data.role);
+					if (res.data.token) Cookies.set('token', res.data.token, { expires: 1 });
 					onSignIn();
 				} else {
 					ElMessage({
 						type: 'error',
-						message: res.msg || '登录失败，请检查账号密码',
+						message: res.msg || '登录失败，请检查手机号密码',
 					});
 				}
 			})

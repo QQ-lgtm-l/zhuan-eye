@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.example.Kcsj.common.HazardLevel;
 import com.example.Kcsj.common.Result;
+import com.example.Kcsj.common.WorkOrderAssigneeService;
 import com.example.Kcsj.entity.ImgRecords;
 import com.example.Kcsj.entity.Message;
 import com.example.Kcsj.entity.User;
@@ -39,6 +40,8 @@ public class PredictionController {
     MessageMapper messageMapper;
     @Resource
     UserMapper userMapper;
+    @Resource
+    WorkOrderAssigneeService assigneeService;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -203,6 +206,7 @@ public class PredictionController {
                     workOrder.setCreateTime(now);
                     workOrder.setUpdateTime(now);
                     workOrder.setRecordId(imgRecords.getId());
+                    assigneeService.apply(workOrder);
                     workOrderMapper.insert(workOrder);
 
                     // 检测预警：始终按隐患等级向对应角色推送（不受responsible影响）
