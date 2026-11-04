@@ -107,6 +107,21 @@ export const dynamicRoutes: Array<RouteRecordRaw> = [
 						},
 					},
 					{
+						path: '/aerialPredict',
+						name: 'aerialPredict',
+						component: () => import('/@/views/aerialPredict/index.vue'),
+						meta: {
+							title: '无人机巡检',
+							isLink: '',
+							isHide: false,
+							isKeepAlive: true,
+							isAffix: false,
+							isIframe: false,
+							roles: ['admin', 'projectManager', 'safetyOfficer', 'inspector'],
+							icon: 'iconfont icon-tupian',
+						},
+					},
+					{
 						path: '/videoPredict',
 						name: 'videoPredict',
 						component: () => import('/@/views/videoPredict/index.vue'),

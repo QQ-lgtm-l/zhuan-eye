@@ -14,6 +14,7 @@ from utils.Fun import Fun
 
 from yolo_detect import detector
 from multi_detect import EnhancedMultiHazardDetector
+from aerial_detect import AerialPileDetector
 from graph_flow import safety_workflow
 from state import HazardState
 from agents import classify_hazard_level
@@ -50,6 +51,7 @@ class SafetyDetectionApp:
         self.host = host
         self.port = port
         self.fun = Fun()
+        self.aerial_detector = AerialPileDetector()
         self.setup_routes()
         self.data = {}
         runs_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'runs')
@@ -71,6 +73,7 @@ class SafetyDetectionApp:
         self.app.add_url_rule('/stopCamera', 'stopCamera', self.stopCamera, methods=['GET'])
         self.app.add_url_rule('/asr', 'asr', self.asr, methods=['POST'])
         self.app.add_url_rule('/tts', 'tts', self.tts, methods=['POST'])
+        self.app.add_url_rule('/aerial/predict', 'aerialPredict', self.aerialPredict, methods=['POST'])
 
         @self.socketio.on('connect')
         def handle_connect():
@@ -211,6 +214,45 @@ class SafetyDetectionApp:
         weights_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'weights')
         weight_items = [{'value': name, 'label': name} for name in self.fun.get_file_names(weights_dir)]
         return json.dumps({'weight_items': weight_items})
+
+    def aerialPredict(self):
+        """航拍堆料检测：独立模型，只返回 pile 框，不建工单。"""
+        try:
+            import re
+            import requests as req
+
+            data = request.get_json() or {}
+            input_img = data.get('inputImg') or data.get('image') or ''
+            if not input_img:
+                return json.dumps({"status": 400, "message": "缺少 inputImg", "code": -1}, ensure_ascii=False)
+
+            match = re.search(r'/files/(.+)', input_img)
+            rel_path = match.group(1) if match else input_img
+            base_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'files')
+            full_path = os.path.join(base_path, rel_path)
+
+            if not os.path.exists(full_path) and input_img.startswith(('http://', 'https://')):
+                resp = req.get(input_img, timeout=30)
+                if resp.status_code != 200:
+                    return json.dumps({"status": 400, "message": f"图片下载失败: HTTP {resp.status_code}", "code": -1}, ensure_ascii=False)
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                with open(full_path, 'wb') as fp:
+                    fp.write(resp.content)
+
+            if not os.path.exists(full_path):
+                return json.dumps({"status": 400, "message": f"图片不存在: {full_path}", "code": -1}, ensure_ascii=False)
+
+            conf = float(data.get('conf', 0.25))
+            result = self.aerial_detector.predict(full_path, conf=conf, imgsz=1280)
+            return json.dumps({
+                "status": 200,
+                "code": 0,
+                "message": "航拍堆料检测完成",
+                "data": result,
+            }, ensure_ascii=False)
+        except Exception as e:
+            print(f"[AERIAL] {e}")
+            return json.dumps({"status": 500, "message": f"航拍检测失败: {str(e)}", "code": -1}, ensure_ascii=False)
 
     def predictImg(self):
         try:
