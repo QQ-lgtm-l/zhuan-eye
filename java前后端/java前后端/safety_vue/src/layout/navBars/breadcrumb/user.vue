@@ -34,8 +34,8 @@
 				</template>
 			</el-popover>
 		</div> -->
-		<div class="layout-navbars-breadcrumb-user-icon" @click="onMessageClick" title="消息中心">
-			<el-badge :value="state.unread" :hidden="state.unread === 0" :max="99" class="user-bell-badge">
+		<div class="layout-navbars-breadcrumb-user-icon" @click="onMessageClick" :title="state.unread > 0 ? `消息中心（${state.unread} 条未读）` : '消息中心'">
+			<el-badge :is-dot="state.unread > 0" :hidden="state.unread === 0" class="user-bell-badge">
 				<el-icon><ele-Bell /></el-icon>
 			</el-badge>
 		</div>
@@ -49,7 +49,7 @@
 		<el-dropdown :show-timeout="70" :hide-timeout="50" @command="onHandleCommandClick" class="custom-dropdown">
 			<span class="layout-navbars-breadcrumb-user-link">
 				<img :src="avatarUrl" class="layout-navbars-breadcrumb-user-link-photo mr5" @error="onAvatarError" />
-				<span class="user-account">{{ userName || '未登录' }}</span>
+				<span class="user-account">{{ displayName || '未登录' }}</span>
 				<span class="user-role" v-if="roleName">{{ roleName }}</span>
 				<el-icon class="el-icon--right">
 					<ele-ArrowDown />
@@ -82,6 +82,7 @@ import { generateAvatar, resolveAvatar } from '/@/utils/avatar';
 import Cookies from 'js-cookie';
 import screenfull from 'screenfull';
 import mittBus from '/@/utils/mitt';
+import { springWsService } from '/@/utils/springWs';
 // 引入组件
 // const UserNews = defineAsyncComponent(() => import('/@/layout/navBars/breadcrumb/userNews.vue'));
 const Search = defineAsyncComponent(() => import('/@/layout/navBars/breadcrumb/search.vue'));
@@ -103,12 +104,13 @@ const state = reactive({
 	disabledSize: 'large',
 });
 
-// 当前登录账号 / 角色（从登录态计算，保证响应式刷新）
+// 当前登录账号 / 姓名 / 角色（从登录态计算，保证响应式刷新）
 const userName = computed(() => userInfos.value.userName || Cookies.get('userName') || '');
+const displayName = computed(() => userInfos.value.name || Cookies.get('displayName') || userName.value);
 const roleName = computed(() => userInfos.value.role || Cookies.get('role') || '');
-const avatarUrl = computed(() => state.img || generateAvatar(userName.value, userName.value));
+const avatarUrl = computed(() => state.img || generateAvatar(displayName.value, userName.value));
 const onAvatarError = () => {
-	state.img = generateAvatar(userName.value, userName.value);
+	state.img = generateAvatar(displayName.value, userName.value);
 };
 
 // 设置分割样式
@@ -229,11 +231,14 @@ const onUserAvatarUpdated = (url: string) => {
 	if (url) state.img = url;
 };
 let unreadTimer: ReturnType<typeof setInterval> | null = null;
+let offWsMessage: (() => void) | null = null;
 // 页面加载时
 onMounted(() => {
 	getTableData();
 	getUnread();
 	unreadTimer = setInterval(getUnread, 60000);
+	// 收到 WebSocket 新消息时立即刷新未读红点，不等 60 秒轮询
+	offWsMessage = springWsService.onMessage(() => getUnread());
 	mittBus.on('userAvatarUpdated', onUserAvatarUpdated);
 	if (Local.get('themeConfig')) {
 		initI18nOrSize('globalComponentSize', 'disabledSize');
@@ -242,6 +247,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
 	if (unreadTimer) clearInterval(unreadTimer);
+	offWsMessage?.();
 	mittBus.off('userAvatarUpdated', onUserAvatarUpdated);
 });
 // 进入消息中心后回来刷新未读数

@@ -3,7 +3,7 @@
 		<div class="message-head">
 			<div class="head-title">
 				<i></i>消息中心
-				<span class="head-sub">WebSocket 实时推送 · 重大 / 较大 / 一般三级预警</span>
+				<span class="head-sub">WebSocket 实时推送 · Ⅰ / Ⅱ / Ⅲ / Ⅳ 四级预警</span>
 			</div>
 			<div class="head-actions">
 				<el-radio-group v-model="state.tab" size="default">

@@ -70,6 +70,13 @@
 									<div class="info-value">{{ state.predictionResult.allTime ?
 										`${state.predictionResult.allTime}` : '-' }}</div>
 								</div>
+								<div class="info-item" v-if="state.predictionResult.orderCount > 0">
+									<div class="info-label">
+										<el-icon class="icon"><Tickets /></el-icon>
+										<span>生成工单</span>
+									</div>
+									<div class="info-value highlight">{{ state.predictionResult.orderCount }} 条，已按等级分派</div>
+								</div>
 							</el-card>
 						</div>
 						<el-collapse v-model="state.activeCollapse" class="detail-collapse">
@@ -157,7 +164,7 @@ import { reactive, ref, onMounted } from 'vue';
 import type { UploadInstance, UploadProps } from 'element-plus';
 import { ElMessage } from 'element-plus';
 import request from '/@/utils/request';
-import { Loading, Plus } from '@element-plus/icons-vue';
+import { Loading, Plus, Tickets } from '@element-plus/icons-vue';
 import { useUserInfo } from '/@/stores/userInfo';
 import { storeToRefs } from 'pinia';
 import { formatDate } from '/@/utils/formatTime';
@@ -184,6 +191,7 @@ const state = reactive({
 		label: [] as string[],
 		confidence: [] as string[],
 		allTime: '',
+		orderCount: 0,
 		suggestion: '' as any
 	},
 	form: {
@@ -273,6 +281,7 @@ const upData = () => {
 				state.predictionResult.label = labels;
 				state.predictionResult.confidence = confidences;
 				state.predictionResult.allTime = res.data.allTime;
+				state.predictionResult.orderCount = Number(res.data.orderCount || 0);
 				state.predictionResult.suggestion = marked(res.data.suggestion || '');
 				state.hazards = res.data.hazards || [];
 				state.allDetections = res.data.all_detections || [];
@@ -282,7 +291,8 @@ const upData = () => {
 			} catch (error) {
 				console.error('解析 JSON 时出错:', error);
 			}
-			ElMessage.success('预测成功！');
+			const createdOrders = Number(res.data.orderCount || 0);
+			ElMessage.success(createdOrders > 0 ? `预测成功，已生成 ${createdOrders} 条工单，请到工单台账查看` : '预测成功！');
 		} else {
 			state.loading = false;
 			ElMessage.error(res.msg);

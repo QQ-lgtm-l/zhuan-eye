@@ -146,6 +146,7 @@ public class PredictionController {
                 imgRecords.setOutImg(String.valueOf(responses.get("outImg")));
                 imgRecords.setSuggestion(String.valueOf(responses.get("suggestion")));
                 imgRecordsMapper.insert(imgRecords);
+                int createdOrderCount = 0;
 
                 JSONArray hazardArray = responses.getJSONArray("hazards");
                 if (hazardArray == null || hazardArray.isEmpty()) {
@@ -208,6 +209,7 @@ public class PredictionController {
                     workOrder.setRecordId(imgRecords.getId());
                     assigneeService.apply(workOrder);
                     workOrderMapper.insert(workOrder);
+                    createdOrderCount++;
 
                     // 检测预警：始终按隐患等级向对应角色推送（不受responsible影响）
                     List<String> pushRoles = HazardLevel.pushRoles(hazardLevel);
@@ -245,7 +247,9 @@ public class PredictionController {
                     MessageWebSocketHandler.sendMessageToMultipleUsers(userIds, pushMessage.toJSONString());
                 }
 
-                return Result.success(response);
+                // 告诉前端本次实际生成了多少条工单，避免“只有消息、没有工单”的误解
+                responses.put("orderCount", createdOrderCount);
+                return Result.success(responses.toJSONString());
             }
         } catch (Exception e) {
             return Result.error("-1", "Error: " + e.getMessage());
